@@ -1,0 +1,19 @@
+name: deploy-prod
+on:
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: cd infra/terraform && terraform init && terraform apply -auto-approve -var-file=prod.tfvars
+      - run: python backend/scripts/apply_ydb_migrations.py
+      - run: bash backend/scripts/build_functions.sh
+      - run: bash backend/scripts/deploy_functions.sh prod
+      - run: bash backend/scripts/deploy_api_gateway.sh prod
+      - uses: actions/setup-node@v4
+        with: {node-version: '20'}
+      - run: cd frontend/public-site && npm ci && npm run build
+      - run: cd frontend/admin-panel && npm ci && npm run build
+      - run: bash backend/scripts/upload_static.sh prod
