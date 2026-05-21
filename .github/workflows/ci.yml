@@ -1,0 +1,19 @@
+name: ci
+on: [pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install pytest
+      - run: cd backend && pytest -q
+      - uses: actions/setup-node@v4
+        with: {node-version: '20'}
+      - run: cd frontend/public-site && npm ci && npm run build
+      - run: cd frontend/admin-panel && npm ci && npm run build
+      - uses: hashicorp/setup-terraform@v3
+      - run: cd infra/terraform && terraform fmt -check && terraform init -backend=false && terraform validate
+      - run: python backend/scripts/validate_openapi.py
+      - run: python backend/scripts/architecture_guard.py
