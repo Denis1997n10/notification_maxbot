@@ -2,19 +2,22 @@ name: deploy-dev
 on:
   push:
     branches: [main]
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -r backend/requirements-dev.txt
+      - run: bash backend/scripts/build_functions.sh dev
       - uses: hashicorp/setup-terraform@v3
       - run: cd infra/terraform && terraform init && terraform apply -auto-approve -var-file=dev.tfvars
       - run: python backend/scripts/apply_ydb_migrations.py
-      - run: bash backend/scripts/build_functions.sh
       - run: bash backend/scripts/deploy_functions.sh dev
       - run: bash backend/scripts/deploy_api_gateway.sh dev
-      - uses: actions/setup-node@v4
-        with: {node-version: '20'}
-      - run: cd frontend/public-site && npm ci && npm run build
-      - run: cd frontend/admin-panel && npm ci && npm run build
       - run: bash backend/scripts/upload_static.sh dev
+      - run: bash backend/scripts/smoke_test.sh dev

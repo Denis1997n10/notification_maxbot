@@ -1,8 +1,17 @@
 from pathlib import Path
+from string import Template
 import yaml
 
 root = Path(__file__).resolve().parents[2]
-spec = yaml.safe_load((root / 'openapi' / 'api-gateway.yaml').read_text())
+tpl = (root / 'openapi' / 'api-gateway.yaml.tftpl').read_text()
+rendered = Template(tpl).substitute(
+    bot_webhook_function_id='f1',
+    public_api_function_id='f2',
+    admin_api_function_id='f3',
+    public_origin='https://public.example.com',
+    admin_origin='https://admin.example.com',
+)
+spec = yaml.safe_load(rendered)
 assert 'paths' in spec
 required = [
 '/api/v1/bot/webhook',
