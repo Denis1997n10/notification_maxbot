@@ -1,0 +1,96 @@
+from infrastructure.max.max_message_renderer import MaxMessageRenderer
+from infrastructure.max.max_notification_channel import MaxNotificationChannel
+from infrastructure.max.max_webhook_parser import MaxWebhookParser
+
+
+class FakeTemplateProvider:
+    def render(self, template_key, channel, context):
+        if template_key == "cleaning.completed":
+            return ("Уборка выполнена", f"Адрес: {context.get('address','')}")
+        if template_key == "services.placeholder":
+            return ("Сервисы", "Скоро здесь можно будет заказать дополнительные услуги")
+        return ("X", "Y")
+
+
+class FakeMaxClient:
+    def __init__(self, fail_image=False, fail_text=False):
+        self.fail_image = fail_image
+        self.fail_text = fail_text
+        self.sent_text = []
+        self.sent_img = []
+
+    async def send_text(self, chat_id, text):
+        if self.fail_text:
+            raise RuntimeError("api error")
+        self.sent_text.append((chat_id, text))
+
+    async def send_with_image(self, chat_id, text, image_bytes):
+        if self.fail_image:
+            from infrastructure.max.errors import MaxImageError
+            raise MaxImageError("img error")
+        self.sent_img.append((chat_id, text, image_bytes))
+
+
+def test_render_cleaning_completed_message():
+    renderer = MaxMessageRenderer(FakeTemplateProvider())
+    payload = renderer.render("cleaning.completed", {"address": "ул. Ленина, 1"}, "u1")
+    assert payload.title == "Уборка выполнена"
+    assert "Ленина" in payload.body
+
+
+def test_send_text_only_notification():
+    client = FakeMaxClient()
+    channel = MaxNotificationChannel(client)
+    from domain.entities.models import NotificationPayload
+    payload = NotificationPayload(user_id="u1", channel="max", title="T", body="B", metadata={})
+    channel.send(payload)
+    assert len(client.sent_text) == 1
+
+
+def test_image_failure_still_sends_text():
+    client = FakeMaxClient(fail_image=True)
+    channel = MaxNotificationChannel(client)
+    from domain.entities.models import NotificationPayload
+    payload = NotificationPayload(user_id="u1", channel="max", title="T", body="B", metadata={"image_bytes": b"x"})
+    channel.send(payload)
+    assert len(client.sent_text) == 1
+
+
+def test_start_payload_parsed():
+    parser = MaxWebhookParser()
+    code = parser.parse_start_public_code({"message": {"text": "/start ABC123"}})
+    assert code == "ABC123"
+
+
+def test_services_placeholder_rendered_when_disabled():
+    renderer = MaxMessageRenderer(FakeTemplateProvider())
+    payload = renderer.render_services_placeholder("u1")
+    assert "Скоро здесь" in payload.body
+
+
+def test_max_api_error_does_not_crash_whole_batch():
+    from application.services import NotificationService
+    from domain.entities.models import TaskEvent
+    from domain.value_objects.enums import EventType, Source
+    from datetime import UTC, datetime
+
+    class ProcRepo:
+        def __init__(self): self.done=set()
+        def is_processed(self, s,e,t): return False
+        def mark_processed(self, s,e,t,at): self.done.add((s,e,t))
+
+    class Registry:
+        def __init__(self, ch): self.ch=ch
+        def get(self, name): return self.ch
+
+    class ChannelWrapper:
+        def __init__(self): self.calls=0
+        def send(self, payload):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("max down")
+
+    svc = NotificationService(ProcRepo(), Registry(ChannelWrapper()), FakeTemplateProvider())
+    event = TaskEvent("e1", "s1", Source.REGIONCITY, EventType.CLEANING_COMPLETED, datetime.now(UTC), {"subject_title": "E"})
+    sent = svc.notify_users(event, ["u1", "u2"])
+    assert sent == 1
