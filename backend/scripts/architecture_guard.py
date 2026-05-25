@@ -25,6 +25,7 @@ for p in Path('backend').rglob('*'):
         repo_text += '\n' + p.read_text(errors='ignore')
 
 checks += [
+    ('no_github_only_prod_build', 'runs-on: [self-hosted' in (Path(__file__).resolve().parents[2] / '.github/workflows/deploy-prod.yml').read_text(), '.github/workflows/deploy-prod.yml'),
     ('no_hardcoded_regioncity_token', 'REGIONCITY_API_TOKEN=' not in repo_text, 'repo'),
     ('no_apartments_table', 'CREATE TABLE IF NOT EXISTS apartments' not in repo_text, 'repo'),
     ('no_photo_storage_table', 'CREATE TABLE IF NOT EXISTS photos' not in repo_text, 'repo'),

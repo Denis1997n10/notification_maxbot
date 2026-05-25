@@ -25,3 +25,5 @@ variable "max_subscriptions_per_user" { type = number default = 20 }
 variable "regioncity_api_token_secret_id" { type = string }
 variable "max_bot_token_secret_id" { type = string }
 variable "admin_jwt_secret_id" { type = string }
+
+variable "release_artifacts_bucket_name" { type = string default = "" }

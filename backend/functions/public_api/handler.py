@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from composition.container import api_response, build_container
+from config.version import get_version_info
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,11 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     logger.info("public_api_request", extra={"path": path, "method": method})
 
+
+    if method == "GET" and path == "/api/v1/system/version":
+        return api_response(200, get_version_info().__dict__)
+    if method == "GET" and path == "/api/v1/system/health":
+        return api_response(200, {"status": "ok"})
     if method == "GET" and path.startswith("/api/v1/public/entrances/"):
         return api_response(200, container.public_service.get_entrance_page(params.get("publicCode")))
     if method == "GET" and path == "/api/v1/public/districts":

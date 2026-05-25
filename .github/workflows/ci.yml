@@ -23,3 +23,5 @@ jobs:
         with:
           name: function-artifacts
           path: dist/functions
+
+      - run: python scripts/check_user_facing_russian.py

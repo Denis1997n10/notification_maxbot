@@ -36,6 +36,11 @@ resource "yandex_resourcemanager_folder_iam_member" "gw_invoker" { folder_id = v
 resource "yandex_ydb_database_serverless" "db" { name = "${var.ydb_name}-${local.env}" folder_id = var.folder_id location_id = var.ydb_location_id }
 resource "yandex_storage_bucket" "public_site" { bucket = var.bucket_public_name }
 resource "yandex_storage_bucket" "admin_panel" { bucket = var.bucket_admin_name }
+resource "yandex_storage_bucket" "release_artifacts" {
+  count  = var.release_artifacts_bucket_name == "" ? 0 : 1
+  bucket = var.release_artifacts_bucket_name
+}
+
 
 resource "yandex_function" "bot_webhook" { name="bot-webhook-${local.env}" user_hash="1" runtime=var.function_runtime entrypoint="handler.handler" memory=var.function_memory execution_timeout="${var.function_timeout_seconds}s" service_account_id=yandex_iam_service_account.functions.id content { zip_filename = "../../dist/functions/bot_webhook.zip" } environment = local.common_env }
 resource "yandex_function" "public_api" { name="public-api-${local.env}" user_hash="1" runtime=var.function_runtime entrypoint="handler.handler" memory=var.function_memory execution_timeout="${var.function_timeout_seconds}s" service_account_id=yandex_iam_service_account.functions.id content { zip_filename = "../../dist/functions/public_api.zip" } environment = local.common_env }
