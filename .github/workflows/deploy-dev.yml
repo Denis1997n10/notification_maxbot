@@ -1,0 +1,13 @@
+name: deploy-dev
+on:
+  workflow_dispatch:
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, rn-prod-builder]
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Use local/bootstrap flow or configure self-hosted runner secrets for non-interactive deploy_all"
+      - run: ./scripts/deploy_all.sh dev

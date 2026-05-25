@@ -1,0 +1,72 @@
+openapi: 3.0.0
+info:
+  title: notification-api
+  version: 1.0.0
+x-yc-apigateway:
+  cors:
+    origin:
+      - "$public_origin"
+      - "$admin_origin"
+      - "http://localhost:5173"
+      - "http://localhost:5174"
+    methods: [GET, POST, PATCH, DELETE, OPTIONS]
+    allowedHeaders: [Content-Type, Authorization]
+paths:
+  /api/v1/system/health:
+    get:
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      responses: {'200': {description: ok}}
+  /api/v1/system/version:
+    get:
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      responses: {'200': {description: ok}}
+  /api/v1/bot/webhook:
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "$bot_webhook_function_id"
+      responses: {'200': {description: ok}}
+  /api/v1/public/entrances/{publicCode}:
+    get:
+      parameters:
+        - name: publicCode
+          in: path
+          required: true
+          schema: {type: string}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      responses: {'200': {description: ok}}
+  /api/v1/public/districts:
+    get:
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      responses: {'200': {description: ok}}
+  /api/v1/public/districts/{districtId}/houses:
+    get:
+      parameters:
+        - name: districtId
+          in: path
+          required: true
+          schema: {type: string}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      responses: {'200': {description: ok}}
+  /api/v1/public/houses/{houseId}/entrances:
+    get:
+      parameters:
+        - name: houseId
+          in: path
+          required: true
+          schema: {type: string}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      responses: {'200': {description: ok}}
+  /api/v1/admin/auth/login:
+    post:
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$admin_api_function_id"}
+      responses: {'200': {description: ok}}
+  /api/v1/admin/{proxy+}:
+    x-yc-apigateway-any-method:
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          schema: {type: string}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$admin_api_function_id"}
+      responses: {'200': {description: ok}}
