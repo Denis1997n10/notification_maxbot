@@ -2,3 +2,5 @@
 .build/
 release/
 dist/
+
+.local/
