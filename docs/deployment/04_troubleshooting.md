@@ -13,3 +13,5 @@
 - `function package missing` -> перезапустите `backend/scripts/build_functions.sh <env>`.
 - `yc CLI not authenticated` -> заново `yc init`.
 - `MAX webhook points to wrong env` -> убедитесь, что prod webhook смотрит на prod gateway.
+
+- `deploy-dev workflow does nothing` -> это ожидаемо: CI deploy отключён до настройки runner-side `.local/dev`/секретов.

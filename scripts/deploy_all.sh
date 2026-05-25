@@ -17,8 +17,12 @@ YDB_ENDPOINT=$(terraform output -raw ydb_endpoint)
 YDB_DATABASE=$(terraform output -raw ydb_database)
 PUBLIC_SITE_URL=$(terraform output -raw public_site_url)
 ADMIN_SITE_URL=$(terraform output -raw admin_site_url)
+PUBLIC_BUCKET_NAME=$(terraform output -raw public_bucket_name)
+ADMIN_BUCKET_NAME=$(terraform output -raw admin_bucket_name)
 cd ../..
 [[ -n "$YDB_ENDPOINT" && -n "$YDB_DATABASE" ]] || { echo "YDB outputs are empty"; exit 1; }
+[[ -n "$PUBLIC_BUCKET_NAME" && -n "$ADMIN_BUCKET_NAME" ]] || { echo "Bucket outputs are empty"; exit 1; }
+export PUBLIC_BUCKET_NAME ADMIN_BUCKET_NAME
 export ENV="$env" YDB_ENDPOINT YDB_DATABASE
 python3 backend/scripts/apply_ydb_migrations.py
 # functions managed by terraform

@@ -18,3 +18,6 @@ Bootstrap автоматически:
 Для prod по умолчанию `USE_MOCKS=false`.
 
 После deploy URL печатаются в конце `deploy_all.sh`.
+
+
+CI deploy requires runner-side .local/<env> and secrets mapping; until configured, supported path is local deploy from a machine with yc init.

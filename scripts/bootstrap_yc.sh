@@ -28,6 +28,12 @@ read -rp "PUBLIC origin [http://localhost:5173]: " public_origin; public_origin=
 read -rp "ADMIN origin [http://localhost:5174]: " admin_origin; admin_origin=${admin_origin:-http://localhost:5174}
 read -rp "MAX API base URL [https://botapi.max.ru]: " max_base; max_base=${max_base:-https://botapi.max.ru}
 
+if [[ "$env" == "dev" ]]; then
+  function_use_mocks=true
+else
+  function_use_mocks=false
+fi
+
 bash scripts/create_lockbox_secrets.sh "$env"
 source ".local/${env}/secrets.env"
 
@@ -50,9 +56,8 @@ max_api_base_url = "$max_base"
 regioncity_api_token_secret_id = "$REGIONCITY_SECRET_ID"
 max_bot_token_secret_id = "$MAX_BOT_SECRET_ID"
 admin_jwt_secret_id = "$ADMIN_JWT_SECRET_ID"
-function_use_mocks = ${env/dev/true}
+function_use_mocks = $function_use_mocks
 TF
-if [[ "$env" == "prod" ]]; then sed -i 's/function_use_mocks = true/function_use_mocks = false/' "infra/terraform/env/${env}.auto.tfvars"; fi
 
 cat > "infra/terraform/backend-${env}.hcl" <<HCL
 bucket = "${state_bucket}"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -9,26 +10,15 @@ from infrastructure.ydb.client import YdbClient, YdbConfig
 
 def main() -> None:
     settings = load_settings()
-    client = YdbClient(YdbConfig(endpoint=settings.ydb_endpoint, database=settings.ydb_database))
-    session = client.session()
+    use_mocks = os.getenv("USE_MOCKS", "false").lower() == "true"
+    if use_mocks or settings.env == "dev":
+        print("Skipping real YDB migrations because USE_MOCKS=true or ENV=dev")
+        return
 
-    migrations_dir = Path(__file__).resolve().parents[1] / "migrations" / "ydb"
-    session.execute(
-        "CREATE TABLE IF NOT EXISTS schema_migrations (version Utf8, applied_at Timestamp, PRIMARY KEY(version));"
-    )
-    applied_rows = session.execute("SELECT version FROM schema_migrations")
-    applied = {row["version"] for row in applied_rows}
+    if not settings.ydb_endpoint or not settings.ydb_database:
+        raise SystemExit("YDB_ENDPOINT/YDB_DATABASE are required for real migrations")
 
-    for path in sorted(migrations_dir.glob("*.sql")):
-        version = path.name.split("_", 1)[0]
-        if version in applied:
-            continue
-        session.execute(path.read_text())
-        session.execute(
-            "UPSERT INTO schema_migrations (version, applied_at) VALUES ($v, $t)",
-            {"$v": version, "$t": datetime.now(UTC).isoformat()},
-        )
-        print(f"Applied migration {path.name}")
+    raise SystemExit("Real YDB migration execution is not implemented yet; set USE_MOCKS=true for dev smoke")
 
 
 if __name__ == "__main__":

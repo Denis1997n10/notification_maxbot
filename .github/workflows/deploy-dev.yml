@@ -9,5 +9,4 @@ jobs:
     runs-on: [self-hosted, linux, rn-prod-builder]
     steps:
       - uses: actions/checkout@v4
-      - run: echo "Use local/bootstrap flow or configure self-hosted runner secrets for non-interactive deploy_all"
-      - run: ./scripts/deploy_all.sh dev
+      - run: echo "deploy-dev from CI is disabled until runner-side .local/dev and secrets are configured; use local flow: yc init && ./scripts/bootstrap_yc.sh dev && ./scripts/deploy_all.sh dev"
