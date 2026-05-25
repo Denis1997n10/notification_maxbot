@@ -21,9 +21,12 @@ locals {
     POLLING_INTERVAL_MINUTES   = tostring(var.polling_interval_minutes)
     POLLING_OVERLAP_MINUTES    = tostring(var.polling_overlap_minutes)
     MAX_SUBSCRIPTIONS_PER_USER = tostring(var.max_subscriptions_per_user)
+    YDB_ENDPOINT               = yandex_ydb_database_serverless.db.document_api_endpoint
+    YDB_DATABASE               = yandex_ydb_database_serverless.db.database_path
     REGIONCITY_API_TOKEN_SECRET_ID = var.regioncity_api_token_secret_id
     MAX_BOT_TOKEN_SECRET_ID        = var.max_bot_token_secret_id
     ADMIN_JWT_SECRET_ID            = var.admin_jwt_secret_id
+    USE_MOCKS                       = var.function_use_mocks ? "true" : "false"
   }
 }
 resource "yandex_iam_service_account" "functions" { name = "${var.resource_prefix}-fn-${local.env}" }
@@ -64,3 +67,9 @@ resource "yandex_function_trigger" "polling_timer" {
   function { id = yandex_function.regioncity_polling.id service_account_id = yandex_iam_service_account.functions.id }
 }
 output "api_gateway_domain" { value = yandex_api_gateway.gateway.domain }
+
+output "ydb_endpoint" { value = yandex_ydb_database_serverless.db.document_api_endpoint }
+output "ydb_database" { value = yandex_ydb_database_serverless.db.database_path }
+output "function_service_account_id" { value = yandex_iam_service_account.functions.id }
+output "public_site_url" { value = var.public_site_url }
+output "admin_site_url" { value = var.admin_site_url }

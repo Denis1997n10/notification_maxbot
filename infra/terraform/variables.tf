@@ -27,3 +27,5 @@ variable "max_bot_token_secret_id" { type = string }
 variable "admin_jwt_secret_id" { type = string }
 
 variable "release_artifacts_bucket_name" { type = string default = "" }
+
+variable "function_use_mocks" { type = bool default = false }

@@ -2,23 +2,13 @@
 set -euo pipefail
 ENVIRONMENT="${1:-dev}"
 : "${API_BASE_URL:?API_BASE_URL is required}"
-
-echo "[smoke] env=$ENVIRONMENT api=$API_BASE_URL"
-code=$(curl -sS -o /tmp/public_districts.json -w "%{http_code}" "$API_BASE_URL/api/v1/public/districts")
-[[ "$code" != "5"* ]] || { echo "public/districts failed with $code"; exit 1; }
-
-if [[ -n "${TEST_PUBLIC_CODE:-}" ]]; then
-  code=$(curl -sS -o /tmp/public_entrance.json -w "%{http_code}" "$API_BASE_URL/api/v1/public/entrances/$TEST_PUBLIC_CODE")
-  [[ "$code" != "5"* ]] || { echo "public entrance failed with $code"; exit 1; }
-else
-  echo "[smoke] skip public entrance: TEST_PUBLIC_CODE not set"
-fi
-
+check_non_5xx(){ local url="$1"; code=$(curl -sS -o /tmp/smoke.out -w "%{http_code}" "$url"); [[ "$code" != "5"* ]] || { echo "5xx for $url code=$code"; exit 1; }; }
+check_non_5xx "$API_BASE_URL/api/v1/system/health"
+check_non_5xx "$API_BASE_URL/api/v1/system/version"
+check_non_5xx "$API_BASE_URL/api/v1/public/districts"
+if [[ -n "${TEST_PUBLIC_CODE:-}" ]]; then check_non_5xx "$API_BASE_URL/api/v1/public/entrances/$TEST_PUBLIC_CODE"; else echo "skip TEST_PUBLIC_CODE"; fi
 if [[ -n "${TEST_ADMIN_LOGIN:-}" && -n "${TEST_ADMIN_PASSWORD:-}" ]]; then
-  code=$(curl -sS -o /tmp/admin_login.json -w "%{http_code}" -X POST "$API_BASE_URL/api/v1/admin/auth/login" -H 'Content-Type: application/json' -d "{\"login\":\"$TEST_ADMIN_LOGIN\",\"password\":\"$TEST_ADMIN_PASSWORD\"}")
-  [[ "$code" != "5"* ]] || { echo "admin login failed with $code"; exit 1; }
-else
-  echo "[smoke] skip admin login: TEST_ADMIN_LOGIN/TEST_ADMIN_PASSWORD not set"
-fi
-
-echo "[smoke] done"
+  code=$(curl -sS -o /tmp/smoke.admin -w "%{http_code}" -X POST "$API_BASE_URL/api/v1/admin/auth/login" -H 'Content-Type: application/json' -d "{\"login\":\"$TEST_ADMIN_LOGIN\",\"password\":\"$TEST_ADMIN_PASSWORD\"}")
+  [[ "$code" != "5"* ]] || { echo "5xx for admin login"; exit 1; }
+else echo "skip admin login"; fi
+echo "smoke ok ($ENVIRONMENT)"
