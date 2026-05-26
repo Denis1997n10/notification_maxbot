@@ -193,7 +193,9 @@ resource "yandex_function" "regioncity_polling" {
 }
 
 resource "yandex_api_gateway" "gateway" {
-  name = "${var.gateway_name}-${local.env}"
+  name               = "${var.gateway_name}-${local.env}"
+  service_account_id = yandex_iam_service_account.gateway.id
+
   spec = templatefile("${path.module}/../../openapi/api-gateway.yaml.tftpl", {
     bot_webhook_function_id = yandex_function.bot_webhook.id
     public_api_function_id  = yandex_function.public_api.id
