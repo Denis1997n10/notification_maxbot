@@ -5,10 +5,7 @@ info:
 x-yc-apigateway:
   cors:
     origin:
-      - "$public_origin"
-      - "$admin_origin"
-      - "http://localhost:5173"
-      - "http://localhost:5174"
+      - "*"
     methods: [GET, POST, PATCH, DELETE, OPTIONS]
     allowedHeaders: [Content-Type, Authorization]
 paths:
