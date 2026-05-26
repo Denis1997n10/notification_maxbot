@@ -130,3 +130,8 @@ variable "function_use_mocks" {
   type    = bool
   default = false
 }
+
+variable "enable_notification_sender" {
+  type    = bool
+  default = false
+}
