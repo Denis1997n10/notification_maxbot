@@ -20,10 +20,10 @@ provider "yandex" {
 locals {
   env = var.environment
 
-  bot_webhook_zip_path         = "../../dist/functions/bot_webhook.zip"
-  public_api_zip_path          = "../../dist/functions/public_api.zip"
-  admin_api_zip_path           = "../../dist/functions/admin_api.zip"
-  regioncity_polling_zip_path  = "../../dist/functions/regioncity_polling.zip"
+  bot_webhook_zip_path        = "../../dist/functions/bot_webhook.zip"
+  public_api_zip_path         = "../../dist/functions/public_api.zip"
+  admin_api_zip_path          = "../../dist/functions/admin_api.zip"
+  regioncity_polling_zip_path = "../../dist/functions/regioncity_polling.zip"
 
   common_env = {
     ENV                        = var.environment
@@ -201,19 +201,6 @@ resource "yandex_api_gateway" "gateway" {
     public_origin           = var.public_origin
     admin_origin            = var.admin_origin
   })
-}
-
-resource "yandex_function_trigger" "polling_timer" {
-  name = "regioncity-polling-${local.env}"
-
-  timer {
-    cron_expression = "0 */20 * * * *"
-  }
-
-  function {
-    id                 = yandex_function.regioncity_polling.id
-    service_account_id = yandex_iam_service_account.functions.id
-  }
 }
 
 output "api_gateway_domain" {
