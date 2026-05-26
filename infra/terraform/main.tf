@@ -205,6 +205,20 @@ resource "yandex_api_gateway" "gateway" {
   })
 }
 
+resource "yandex_function_trigger" "polling_timer" {
+  count = var.enable_polling_timer ? 1 : 0
+  name  = "regioncity-polling-${local.env}"
+
+  timer {
+    cron_expression = "0 */20 * * * *"
+  }
+
+  function {
+    id                 = yandex_function.regioncity_polling.id
+    service_account_id = yandex_iam_service_account.functions.id
+  }
+}
+
 output "api_gateway_domain" {
   value = yandex_api_gateway.gateway.domain
 }
