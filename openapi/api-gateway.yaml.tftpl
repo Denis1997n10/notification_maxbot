@@ -11,17 +11,17 @@ x-yc-apigateway:
 paths:
   /api/v1/system/health:
     get:
-      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "${public_api_function_id}"}
       responses: {'200': {description: ok}}
   /api/v1/system/version:
     get:
-      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "${public_api_function_id}"}
       responses: {'200': {description: ok}}
   /api/v1/bot/webhook:
     post:
       x-yc-apigateway-integration:
         type: cloud_functions
-        function_id: "$bot_webhook_function_id"
+        function_id: "${bot_webhook_function_id}"
       responses: {'200': {description: ok}}
   /api/v1/public/entrances/{publicCode}:
     get:
@@ -30,11 +30,11 @@ paths:
           in: path
           required: true
           schema: {type: string}
-      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "${public_api_function_id}"}
       responses: {'200': {description: ok}}
   /api/v1/public/districts:
     get:
-      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "${public_api_function_id}"}
       responses: {'200': {description: ok}}
   /api/v1/public/districts/{districtId}/houses:
     get:
@@ -43,7 +43,7 @@ paths:
           in: path
           required: true
           schema: {type: string}
-      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "${public_api_function_id}"}
       responses: {'200': {description: ok}}
   /api/v1/public/houses/{houseId}/entrances:
     get:
@@ -52,11 +52,11 @@ paths:
           in: path
           required: true
           schema: {type: string}
-      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "${public_api_function_id}"}
       responses: {'200': {description: ok}}
   /api/v1/admin/auth/login:
     post:
-      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$admin_api_function_id"}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "${admin_api_function_id}"}
       responses: {'200': {description: ok}}
   /api/v1/admin/{proxy+}:
     x-yc-apigateway-any-method:
@@ -65,5 +65,5 @@ paths:
           in: path
           required: true
           schema: {type: string}
-      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$admin_api_function_id"}
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "${admin_api_function_id}"}
       responses: {'200': {description: ok}}
