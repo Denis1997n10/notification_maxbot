@@ -73,16 +73,19 @@ resource "yandex_ydb_database_serverless" "db" {
 }
 
 resource "yandex_storage_bucket" "public_site" {
-  bucket = var.bucket_public_name
+  bucket    = var.bucket_public_name
+  folder_id = var.folder_id
 }
 
 resource "yandex_storage_bucket" "admin_panel" {
-  bucket = var.bucket_admin_name
+  bucket    = var.bucket_admin_name
+  folder_id = var.folder_id
 }
 
 resource "yandex_storage_bucket" "release_artifacts" {
-  count  = var.release_artifacts_bucket_name == "" ? 0 : 1
-  bucket = var.release_artifacts_bucket_name
+  count     = var.release_artifacts_bucket_name == "" ? 0 : 1
+  bucket    = var.release_artifacts_bucket_name
+  folder_id = var.folder_id
 }
 
 resource "yandex_function" "bot_webhook" {
@@ -91,7 +94,7 @@ resource "yandex_function" "bot_webhook" {
   runtime            = var.function_runtime
   entrypoint         = "handler.handler"
   memory             = var.function_memory
-  execution_timeout  = "${var.function_timeout_seconds}s"
+  execution_timeout  = tostring(var.function_timeout_seconds)
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
@@ -106,7 +109,7 @@ resource "yandex_function" "public_api" {
   runtime            = var.function_runtime
   entrypoint         = "handler.handler"
   memory             = var.function_memory
-  execution_timeout  = "${var.function_timeout_seconds}s"
+  execution_timeout  = tostring(var.function_timeout_seconds)
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
@@ -121,7 +124,7 @@ resource "yandex_function" "admin_api" {
   runtime            = var.function_runtime
   entrypoint         = "handler.handler"
   memory             = var.function_memory
-  execution_timeout  = "${var.function_timeout_seconds}s"
+  execution_timeout  = tostring(var.function_timeout_seconds)
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
@@ -136,7 +139,7 @@ resource "yandex_function" "regioncity_polling" {
   runtime            = var.function_runtime
   entrypoint         = "handler.handler"
   memory             = var.function_memory
-  execution_timeout  = "${var.function_timeout_seconds}s"
+  execution_timeout  = tostring(var.function_timeout_seconds)
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
@@ -151,7 +154,7 @@ resource "yandex_function" "notification_sender" {
   runtime            = var.function_runtime
   entrypoint         = "handler.handler"
   memory             = var.function_memory
-  execution_timeout  = "${var.function_timeout_seconds}s"
+  execution_timeout  = tostring(var.function_timeout_seconds)
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
