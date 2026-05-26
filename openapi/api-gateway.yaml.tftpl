@@ -80,6 +80,20 @@ paths:
         function_id: "${admin_api_function_id}"
         service_account_id: "${gateway_service_account_id}"
       responses: {'200': {description: ok}}
+  /api/v1/admin/me:
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses: {'200': {description: ok}}
+  /api/v1/admin/test-notification:
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses: {'200': {description: ok}}
   /api/v1/admin/{proxy+}:
     x-yc-apigateway-any-method:
       parameters:
