@@ -193,15 +193,15 @@ resource "yandex_function" "regioncity_polling" {
 }
 
 resource "yandex_api_gateway" "gateway" {
-  name               = "${var.gateway_name}-${local.env}"
-  service_account_id = yandex_iam_service_account.gateway.id
+  name = "${var.gateway_name}-${local.env}"
 
   spec = templatefile("${path.module}/../../openapi/api-gateway.yaml.tftpl", {
-    bot_webhook_function_id = yandex_function.bot_webhook.id
-    public_api_function_id  = yandex_function.public_api.id
-    admin_api_function_id   = yandex_function.admin_api.id
-    public_origin           = var.public_origin
-    admin_origin            = var.admin_origin
+    bot_webhook_function_id    = yandex_function.bot_webhook.id
+    public_api_function_id     = yandex_function.public_api.id
+    admin_api_function_id      = yandex_function.admin_api.id
+    gateway_service_account_id = yandex_iam_service_account.gateway.id
+    public_origin              = var.public_origin
+    admin_origin               = var.admin_origin
   })
 }
 
