@@ -20,6 +20,12 @@ provider "yandex" {
 locals {
   env = var.environment
 
+  bot_webhook_zip_path          = "../../dist/functions/bot_webhook.zip"
+  public_api_zip_path           = "../../dist/functions/public_api.zip"
+  admin_api_zip_path            = "../../dist/functions/admin_api.zip"
+  regioncity_polling_zip_path   = "../../dist/functions/regioncity_polling.zip"
+  notification_sender_zip_path  = "../../dist/functions/notification_sender.zip"
+
   common_env = {
     ENV                        = var.environment
     REGIONCITY_BASE_URL        = var.regioncity_base_url
@@ -83,14 +89,53 @@ resource "yandex_storage_bucket" "admin_panel" {
 }
 
 resource "yandex_storage_bucket" "release_artifacts" {
-  count     = var.release_artifacts_bucket_name == "" ? 0 : 1
   bucket    = var.release_artifacts_bucket_name
   folder_id = var.folder_id
 }
 
+resource "yandex_storage_object" "bot_webhook_zip" {
+  bucket       = yandex_storage_bucket.release_artifacts.bucket
+  key          = "functions/${local.env}/bot_webhook-${filesha256(local.bot_webhook_zip_path)}.zip"
+  source       = local.bot_webhook_zip_path
+  source_hash  = filemd5(local.bot_webhook_zip_path)
+  content_type = "application/zip"
+}
+
+resource "yandex_storage_object" "public_api_zip" {
+  bucket       = yandex_storage_bucket.release_artifacts.bucket
+  key          = "functions/${local.env}/public_api-${filesha256(local.public_api_zip_path)}.zip"
+  source       = local.public_api_zip_path
+  source_hash  = filemd5(local.public_api_zip_path)
+  content_type = "application/zip"
+}
+
+resource "yandex_storage_object" "admin_api_zip" {
+  bucket       = yandex_storage_bucket.release_artifacts.bucket
+  key          = "functions/${local.env}/admin_api-${filesha256(local.admin_api_zip_path)}.zip"
+  source       = local.admin_api_zip_path
+  source_hash  = filemd5(local.admin_api_zip_path)
+  content_type = "application/zip"
+}
+
+resource "yandex_storage_object" "regioncity_polling_zip" {
+  bucket       = yandex_storage_bucket.release_artifacts.bucket
+  key          = "functions/${local.env}/regioncity_polling-${filesha256(local.regioncity_polling_zip_path)}.zip"
+  source       = local.regioncity_polling_zip_path
+  source_hash  = filemd5(local.regioncity_polling_zip_path)
+  content_type = "application/zip"
+}
+
+resource "yandex_storage_object" "notification_sender_zip" {
+  bucket       = yandex_storage_bucket.release_artifacts.bucket
+  key          = "functions/${local.env}/notification_sender-${filesha256(local.notification_sender_zip_path)}.zip"
+  source       = local.notification_sender_zip_path
+  source_hash  = filemd5(local.notification_sender_zip_path)
+  content_type = "application/zip"
+}
+
 resource "yandex_function" "bot_webhook" {
   name               = "bot-webhook-${local.env}"
-  user_hash          = filesha256("../../dist/functions/bot_webhook.zip")
+  user_hash          = filesha256(local.bot_webhook_zip_path)
   runtime            = var.function_runtime
   entrypoint         = "handler.handler"
   memory             = var.function_memory
@@ -98,14 +143,16 @@ resource "yandex_function" "bot_webhook" {
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
-  content {
-    zip_filename = "../../dist/functions/bot_webhook.zip"
+  package {
+    bucket_name = yandex_storage_object.bot_webhook_zip.bucket
+    object_name = yandex_storage_object.bot_webhook_zip.key
+    sha_256     = filesha256(local.bot_webhook_zip_path)
   }
 }
 
 resource "yandex_function" "public_api" {
   name               = "public-api-${local.env}"
-  user_hash          = filesha256("../../dist/functions/public_api.zip")
+  user_hash          = filesha256(local.public_api_zip_path)
   runtime            = var.function_runtime
   entrypoint         = "handler.handler"
   memory             = var.function_memory
@@ -113,14 +160,16 @@ resource "yandex_function" "public_api" {
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
-  content {
-    zip_filename = "../../dist/functions/public_api.zip"
+  package {
+    bucket_name = yandex_storage_object.public_api_zip.bucket
+    object_name = yandex_storage_object.public_api_zip.key
+    sha_256     = filesha256(local.public_api_zip_path)
   }
 }
 
 resource "yandex_function" "admin_api" {
   name               = "admin-api-${local.env}"
-  user_hash          = filesha256("../../dist/functions/admin_api.zip")
+  user_hash          = filesha256(local.admin_api_zip_path)
   runtime            = var.function_runtime
   entrypoint         = "handler.handler"
   memory             = var.function_memory
@@ -128,14 +177,16 @@ resource "yandex_function" "admin_api" {
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
-  content {
-    zip_filename = "../../dist/functions/admin_api.zip"
+  package {
+    bucket_name = yandex_storage_object.admin_api_zip.bucket
+    object_name = yandex_storage_object.admin_api_zip.key
+    sha_256     = filesha256(local.admin_api_zip_path)
   }
 }
 
 resource "yandex_function" "regioncity_polling" {
   name               = "regioncity-polling-${local.env}"
-  user_hash          = filesha256("../../dist/functions/regioncity_polling.zip")
+  user_hash          = filesha256(local.regioncity_polling_zip_path)
   runtime            = var.function_runtime
   entrypoint         = "handler.handler"
   memory             = var.function_memory
@@ -143,14 +194,16 @@ resource "yandex_function" "regioncity_polling" {
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
-  content {
-    zip_filename = "../../dist/functions/regioncity_polling.zip"
+  package {
+    bucket_name = yandex_storage_object.regioncity_polling_zip.bucket
+    object_name = yandex_storage_object.regioncity_polling_zip.key
+    sha_256     = filesha256(local.regioncity_polling_zip_path)
   }
 }
 
 resource "yandex_function" "notification_sender" {
   name               = "notification-sender-${local.env}"
-  user_hash          = filesha256("../../dist/functions/notification_sender.zip")
+  user_hash          = filesha256(local.notification_sender_zip_path)
   runtime            = var.function_runtime
   entrypoint         = "handler.handler"
   memory             = var.function_memory
@@ -158,8 +211,10 @@ resource "yandex_function" "notification_sender" {
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
-  content {
-    zip_filename = "../../dist/functions/notification_sender.zip"
+  package {
+    bucket_name = yandex_storage_object.notification_sender_zip.bucket
+    object_name = yandex_storage_object.notification_sender_zip.key
+    sha_256     = filesha256(local.notification_sender_zip_path)
   }
 }
 
@@ -217,4 +272,8 @@ output "public_bucket_name" {
 
 output "admin_bucket_name" {
   value = yandex_storage_bucket.admin_panel.bucket
+}
+
+output "release_artifacts_bucket_name" {
+  value = yandex_storage_bucket.release_artifacts.bucket
 }
