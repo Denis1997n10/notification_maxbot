@@ -20,11 +20,10 @@ provider "yandex" {
 locals {
   env = var.environment
 
-  bot_webhook_zip_path          = "../../dist/functions/bot_webhook.zip"
-  public_api_zip_path           = "../../dist/functions/public_api.zip"
-  admin_api_zip_path            = "../../dist/functions/admin_api.zip"
-  regioncity_polling_zip_path   = "../../dist/functions/regioncity_polling.zip"
-  notification_sender_zip_path  = "../../dist/functions/notification_sender.zip"
+  bot_webhook_zip_path         = "../../dist/functions/bot_webhook.zip"
+  public_api_zip_path          = "../../dist/functions/public_api.zip"
+  admin_api_zip_path           = "../../dist/functions/admin_api.zip"
+  regioncity_polling_zip_path  = "../../dist/functions/regioncity_polling.zip"
 
   common_env = {
     ENV                        = var.environment
@@ -125,14 +124,6 @@ resource "yandex_storage_object" "regioncity_polling_zip" {
   content_type = "application/zip"
 }
 
-resource "yandex_storage_object" "notification_sender_zip" {
-  bucket       = yandex_storage_bucket.release_artifacts.bucket
-  key          = "functions/${local.env}/notification_sender-${filesha256(local.notification_sender_zip_path)}.zip"
-  source       = local.notification_sender_zip_path
-  source_hash  = filemd5(local.notification_sender_zip_path)
-  content_type = "application/zip"
-}
-
 resource "yandex_function" "bot_webhook" {
   name               = "bot-webhook-${local.env}"
   user_hash          = filesha256(local.bot_webhook_zip_path)
@@ -201,23 +192,6 @@ resource "yandex_function" "regioncity_polling" {
   }
 }
 
-resource "yandex_function" "notification_sender" {
-  name               = "notification-sender-${local.env}"
-  user_hash          = filesha256(local.notification_sender_zip_path)
-  runtime            = var.function_runtime
-  entrypoint         = "handler.handler"
-  memory             = var.function_memory
-  execution_timeout  = tostring(var.function_timeout_seconds)
-  service_account_id = yandex_iam_service_account.functions.id
-  environment        = local.common_env
-
-  package {
-    bucket_name = yandex_storage_object.notification_sender_zip.bucket
-    object_name = yandex_storage_object.notification_sender_zip.key
-    sha_256     = filesha256(local.notification_sender_zip_path)
-  }
-}
-
 resource "yandex_api_gateway" "gateway" {
   name = "${var.gateway_name}-${local.env}"
   spec = templatefile("${path.module}/../../openapi/api-gateway.yaml.tftpl", {
@@ -233,7 +207,7 @@ resource "yandex_function_trigger" "polling_timer" {
   name = "regioncity-polling-${local.env}"
 
   timer {
-    cron_expression = "0 */20 * * * ?"
+    cron_expression = "0 */20 * * * *"
   }
 
   function {
