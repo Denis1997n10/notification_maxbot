@@ -135,3 +135,8 @@ variable "enable_notification_sender" {
   type    = bool
   default = false
 }
+
+variable "enable_polling_timer" {
+  type    = bool
+  default = false
+}
