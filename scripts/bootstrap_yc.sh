@@ -63,10 +63,14 @@ cat > "infra/terraform/backend-${env}.hcl" <<HCL
 bucket = "${state_bucket}"
 key = "resident-notifications/${env}/terraform.tfstate"
 region = "ru-central1"
-endpoint = "https://storage.yandexcloud.net"
+endpoints = {
+  s3 = "https://storage.yandexcloud.net"
+}
 skip_region_validation = true
 skip_credentials_validation = true
 skip_metadata_api_check = true
+skip_requesting_account_id = true
+use_path_style = true
 HCL
 
 cat > ".local/${env}/backend.env" <<ENV
