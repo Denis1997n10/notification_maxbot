@@ -20,6 +20,10 @@ if [[ "$env" == "dev" ]]; then
 else
   read -rp "This will deploy production resources. Type deploy-prod to continue: " confirmation
   [[ "$confirmation" == "deploy-prod" ]] || exit 1
+  if [[ -n "${ADMIN_BOOTSTRAP_LOGIN:-}" || -n "${ADMIN_BOOTSTRAP_PASSWORD:-}" ]]; then
+    require_var ADMIN_BOOTSTRAP_LOGIN
+    require_var ADMIN_BOOTSTRAP_PASSWORD
+  fi
   if [[ ! -f ".local/prod/backend.env" || ! -f "infra/terraform/env/prod.auto.tfvars" || ! -f "infra/terraform/backend-prod.hcl" ]]; then
     PROD_CONFIRMED=1 bash scripts/bootstrap_yc.sh prod
   fi

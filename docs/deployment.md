@@ -44,6 +44,12 @@ MAX_BOT_TOKEN='<token>' MAX_WEBHOOK_SECRET='<non-empty-secret-entered-during-boo
 
 Polling timer остаётся выключенным, пока отдельно не подтверждён end-to-end поток RegionCity events -> subscriptions -> MAX notifications.
 
+Для восстановления создания admin user после уже выполненного deploy:
+
+```bash
+ADMIN_BOOTSTRAP_LOGIN='<login>' ADMIN_BOOTSTRAP_PASSWORD='<strong-password>' bash scripts/seed_admin_user.sh prod
+```
+
 ## Destroy flow
 
 ```bash

@@ -78,6 +78,12 @@ MAX_BOT_TOKEN='<token>' MAX_WEBHOOK_SECRET='<non-empty-secret-entered-during-boo
 
 `bootstrap_yc.sh prod` запрашивает RegionCity API token, MAX bot token, admin JWT secret и MAX webhook secret и сохраняет в локальные файлы только Lockbox IDs/version IDs. `deploy_all.sh prod` создаёт static website buckets и собирает admin/public frontend с URL созданного API Gateway. `MAX_WEBHOOK_SECRET` защищает входящие webhook-вызовы заголовком `X-Max-Bot-Api-Secret`.
 
+Если инфраструктура и frontend уже развернуты, а создание администратора было пропущено или завершилось ошибкой, не запускайте bootstrap повторно. Создайте или обновите администратора отдельно:
+
+```bash
+ADMIN_BOOTSTRAP_LOGIN='<login>' ADMIN_BOOTSTRAP_PASSWORD='<strong-password>' bash scripts/seed_admin_user.sh prod
+```
+
 Timer RegionCity polling по умолчанию остаётся выключенным (`enable_polling_timer=false`). До отдельной проверки end-to-end обработки внешних событий production smoke ограничен входом в админку, тестовым уведомлением из неё и командами MAX bot.
 
 Сгенерированные backend/tfvars/env-файлы и локальные Terraform state/cache не должны коммититься.

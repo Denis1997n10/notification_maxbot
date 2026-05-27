@@ -335,11 +335,11 @@ output "function_service_account_id" {
 }
 
 output "public_site_url" {
-  value = yandex_storage_bucket.public_site.website_endpoint
+  value = "https://${yandex_storage_bucket.public_site.website_endpoint}"
 }
 
 output "admin_site_url" {
-  value = yandex_storage_bucket.admin_panel.website_endpoint
+  value = "https://${yandex_storage_bucket.admin_panel.website_endpoint}"
 }
 
 output "public_bucket_name" {
