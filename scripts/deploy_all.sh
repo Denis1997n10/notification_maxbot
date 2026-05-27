@@ -10,6 +10,12 @@ if [[ "$env" == "prod" ]]; then
 fi
 
 bash scripts/check_tools.sh
+
+if [[ ! -f ".local/${env}/backend.env" || ! -f "infra/terraform/env/${env}.auto.tfvars" || ! -f "infra/terraform/backend-${env}.hcl" ]]; then
+  echo "Deployment files are missing. Run first: bash scripts/bootstrap_yc.sh ${env}"
+  exit 1
+fi
+
 source ".local/${env}/backend.env"
 
 if [[ -z "${YC_TOKEN:-}" ]]; then
