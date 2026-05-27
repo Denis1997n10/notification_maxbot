@@ -10,5 +10,5 @@ cd "$ROOT_DIR/frontend/admin-panel"
 npm ci
 
 echo "Admin UI: http://localhost:5174"
-echo "API: https://${API_DOMAIN}"
-VITE_ADMIN_API_BASE_URL="https://${API_DOMAIN}" npm run dev -- --host 0.0.0.0 --port 5174
+echo "API target through Vite proxy: https://${API_DOMAIN}"
+VITE_PROXY_TARGET="https://${API_DOMAIN}" VITE_ADMIN_API_BASE_URL="" npm run dev -- --host 0.0.0.0 --port 5174
