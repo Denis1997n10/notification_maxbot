@@ -1,6 +1,11 @@
 CREATE TABLE IF NOT EXISTS admin_users (
-  admin_id Utf8,
+  id Utf8,
+  login Utf8,
+  password_hash Utf8,
   role Utf8,
   is_active Bool,
-  PRIMARY KEY (admin_id)
+  created_at Timestamp,
+  updated_at Timestamp,
+  PRIMARY KEY (id),
+  INDEX idx_login GLOBAL ON (login)
 );

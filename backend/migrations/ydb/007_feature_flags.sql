@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS feature_flags (
-  flag_key Utf8,
+  code Utf8,
   enabled Bool,
-  PRIMARY KEY (flag_key)
+  updated_at Timestamp,
+  PRIMARY KEY (code)
 );

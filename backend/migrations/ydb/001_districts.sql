@@ -1,7 +1,8 @@
 CREATE TABLE IF NOT EXISTS districts (
-  district_id Utf8,
-  title Utf8,
+  id Utf8,
+  name Utf8,
   is_active Bool,
   created_at Timestamp,
-  PRIMARY KEY (district_id)
+  updated_at Timestamp,
+  PRIMARY KEY (id)
 );
