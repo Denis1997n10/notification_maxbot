@@ -22,7 +22,9 @@ for fn in "${FUNCTIONS[@]}"; do
   STAGE="$BUILD_ROOT/$fn"
   mkdir -p "$STAGE"
 
-  cp -R "$BACKEND_DIR/src" "$STAGE/src"
+  # Copy package contents to ZIP root so imports like `from composition.container`
+  # work in Yandex Cloud Functions without a custom PYTHONPATH.
+  cp -R "$BACKEND_DIR/src/." "$STAGE/"
   cp "$BACKEND_DIR/functions/$fn/handler.py" "$STAGE/handler.py"
 
   python -m pip install -q -r "$REQ_FILE" -t "$STAGE" >/dev/null
