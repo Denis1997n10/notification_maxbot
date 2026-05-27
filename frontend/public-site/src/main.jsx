@@ -25,7 +25,7 @@ function EntrancePage() {
 
   React.useEffect(() => { load() }, [load])
 
-  if (state.loading) return <p>Загрузка...</p>
+  if (state.loading) return <p aria-live='polite'>Загрузка...</p>
   if (state.error === 'unavailable') return <p>Страница подъезда недоступна.</p>
   if (state.error) return <div><p>Не удалось загрузить данные. Попробуйте снова.</p><button onClick={load}>Повторить</button></div>
 

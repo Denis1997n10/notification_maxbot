@@ -33,7 +33,7 @@ function App(){
   }
 
   React.useEffect(()=>{ if(token) loadMe() },[token])
-  if(!token) return <form onSubmit={login}><h1>Вход</h1><input name='login' placeholder='Логин'/><input name='password' placeholder='Пароль' type='password'/><button>Войти</button><p>{msg}</p></form>
+  if(!token) return <form onSubmit={login}><h1>Вход</h1><input name='login' placeholder='Логин' autoComplete='username'/><input name='password' placeholder='Пароль' type='password' autoComplete='current-password'/><button>Войти</button><p>{msg}</p></form>
 
   const superAdmin = role === 'super_admin'
   return <main style={{fontFamily:'sans-serif'}}>

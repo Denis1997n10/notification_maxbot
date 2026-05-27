@@ -23,6 +23,10 @@ else
   if [[ -n "${ADMIN_BOOTSTRAP_LOGIN:-}" || -n "${ADMIN_BOOTSTRAP_PASSWORD:-}" ]]; then
     require_var ADMIN_BOOTSTRAP_LOGIN
     require_var ADMIN_BOOTSTRAP_PASSWORD
+    if (( ${#ADMIN_BOOTSTRAP_PASSWORD} < 12 )); then
+      echo "ADMIN_BOOTSTRAP_PASSWORD must contain at least 12 characters"
+      exit 1
+    fi
   fi
   if [[ ! -f ".local/prod/backend.env" || ! -f "infra/terraform/env/prod.auto.tfvars" || ! -f "infra/terraform/backend-prod.hcl" ]]; then
     PROD_CONFIRMED=1 bash scripts/bootstrap_yc.sh prod

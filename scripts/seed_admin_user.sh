@@ -16,6 +16,10 @@ require_var() {
 
 require_var ADMIN_BOOTSTRAP_LOGIN
 require_var ADMIN_BOOTSTRAP_PASSWORD
+if (( ${#ADMIN_BOOTSTRAP_PASSWORD} < 12 )); then
+  echo "ADMIN_BOOTSTRAP_PASSWORD must contain at least 12 characters"
+  exit 1
+fi
 
 read -rp "This will create or update a production admin user. Type seed-prod-admin to continue: " confirmation
 [[ "$confirmation" == "seed-prod-admin" ]] || exit 1
