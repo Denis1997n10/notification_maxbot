@@ -526,41 +526,193 @@ class BotService:
     def handle_payload(self, payload: dict):
         text = self.webhook_parser.message_text(payload)
         ext_user = self.webhook_parser.external_user_id(payload) or "unknown"
-        user = self.users.get_or_create_channel_user("max", ext_user, (payload.get("user") or {}).get("name", ""))
+        user = self.users.get_or_create_channel_user("max", ext_user, self.webhook_parser.display_name(payload))
 
         if text.startswith("/start"):
             arg = text.replace("/start", "", 1).strip()
             if arg.startswith("e_"):
                 arg = arg[2:]
             if arg:
-                s = self.subjects.get_by_public_code(arg)
-                if not s:
-                    return {"message": "Адрес не найден"}
-                return {"message": f"Вы хотите получать уведомления по адресу: {s.title}? Ответьте: Подписаться {arg}"}
-            return {"message": "Добро пожаловать! Команды: Мои адреса, Отключить все"}
+                return self._subscribe_by_public_code(user.user_id, arg)
+            return self._welcome()
 
-        if text.startswith("Подписаться "):
-            code = text.split(" ", 1)[1].strip()
-            s = self.subjects.get_by_public_code(code)
-            if not s:
-                return {"message": "Адрес не найден"}
-            if self.subscriptions.get_active(user.user_id, s.subject_id):
-                return {"message": "Вы уже подписаны"}
-            self.sub_uc.execute(Subscription(subscription_id=str(uuid4()), user_id=user.user_id, subject_id=s.subject_id))
-            return {"message": "Подписка оформлена"}
+        command = self._normalize(text)
+        subscribe_code = self._subscription_code(text)
+        if subscribe_code:
+            return self._subscribe_by_public_code(user.user_id, subscribe_code)
 
-        if text in {"Мои адреса", "my_subscriptions"}:
-            subs = self.list_uc.execute(user.user_id)
-            return {"message": f"Подписок: {len(subs)}"}
+        if command in {"мои адреса", "адреса", "подписки", "my_subscriptions", "/list"}:
+            return self._list_subscriptions(user.user_id)
 
-        if text in {"Отключить все", "disable_all"}:
+        if command in {"подписаться", "добавить адрес", "добавить", "/subscribe"}:
+            return self._subscribe_help()
+
+        if command in {"отписаться", "удалить адрес", "remove_subscription"}:
+            return self._unsubscribe_help(user.user_id)
+
+        if command in {"отключить все", "отписаться от всего", "удалить все", "disable_all"}:
             n = self.disable_uc.execute(user.user_id)
-            return {"message": f"Отключено: {n}"}
+            if n == 0:
+                return {"message": "Активных подписок пока нет.", "keyboard": self._main_keyboard()}
+            return {"message": f"Готово. Отключил подписки: {n}.", "keyboard": self._main_keyboard()}
 
-        if text in {"Услуги", "services"}:
-            return {"message": "Скоро здесь можно будет заказать дополнительные услуги"}
+        if command in {"услуги", "сервисы", "services"}:
+            return {
+                "message": "Раздел услуг пока зарезервирован. Сейчас бот отправляет уведомления по выбранным адресам.",
+                "keyboard": self._main_keyboard(),
+            }
 
-        return {"message": "help"}
+        if command in {"помощь", "help", "/help", "меню", "menu"}:
+            return self._help()
+
+        unsubscribe_target = self._unsubscribe_target(text)
+        if unsubscribe_target:
+            return self._unsubscribe(user.user_id, unsubscribe_target)
+
+        return {
+            "message": "Не понял команду. Выберите действие кнопкой ниже или напишите «Помощь».",
+            "keyboard": self._main_keyboard(),
+        }
+
+    @staticmethod
+    def _normalize(text: str) -> str:
+        return " ".join(text.strip().lower().split())
+
+    @staticmethod
+    def _main_keyboard() -> list[list[dict]]:
+        return [
+            [{"type": "message", "text": "Мои адреса"}, {"type": "message", "text": "Подписаться"}],
+            [{"type": "message", "text": "Услуги"}, {"type": "message", "text": "Помощь"}],
+        ]
+
+    def _welcome(self) -> dict:
+        return {
+            "message": (
+                "Здравствуйте. Я буду присылать уведомления по вашим адресам.\n\n"
+                "Как начать:\n"
+                "1. Откройте QR-код у нужного подъезда или публичную страницу адреса.\n"
+                "2. Нажмите «Подписаться в MAX».\n"
+                "3. Бот сам добавит адрес в ваши подписки.\n\n"
+                "Квартиру указывать не нужно."
+            ),
+            "keyboard": self._main_keyboard(),
+        }
+
+    def _help(self) -> dict:
+        return {
+            "message": (
+                "Что можно сделать:\n"
+                "• «Мои адреса» — посмотреть активные подписки.\n"
+                "• «Подписаться» — узнать, как добавить адрес через QR.\n"
+                "• «Отписаться 1» — отключить адрес по номеру из списка.\n"
+                "• «Отключить все» — выключить все уведомления.\n"
+                "• «Услуги» — будущие сервисы платформы."
+            ),
+            "keyboard": self._main_keyboard(),
+        }
+
+    def _subscribe_help(self) -> dict:
+        return {
+            "message": (
+                "Чтобы подписаться на адрес, отсканируйте QR-код у подъезда или откройте публичную страницу адреса "
+                "и нажмите «Подписаться в MAX».\n\n"
+                "Если у вас уже есть код из ссылки, отправьте: «Подписаться КОД»."
+            ),
+            "keyboard": [[{"type": "message", "text": "Мои адреса"}, {"type": "message", "text": "Помощь"}]],
+        }
+
+    def _subscription_code(self, text: str) -> str | None:
+        stripped = text.strip()
+        lowered = self._normalize(stripped)
+        prefixes = ("подписаться ", "/subscribe ", "subscribe ", "+ ")
+        for prefix in prefixes:
+            if lowered.startswith(prefix):
+                return stripped[len(prefix) :].strip()
+        return None
+
+    def _subscribe_by_public_code(self, user_id: str, code: str) -> dict:
+        clean_code = code.strip()
+        if clean_code.startswith("e_"):
+            clean_code = clean_code[2:]
+        subject = self.subjects.get_by_public_code(clean_code)
+        if not subject:
+            return {
+                "message": "Не нашел этот адрес. Проверьте ссылку или отсканируйте QR-код еще раз.",
+                "keyboard": self._main_keyboard(),
+            }
+        if self.subscriptions.get_active(user_id, subject.subject_id):
+            return {
+                "message": f"Вы уже подписаны на этот адрес:\n{subject.title}",
+                "keyboard": self._subscription_keyboard(user_id),
+            }
+        self.sub_uc.execute(Subscription(subscription_id=str(uuid4()), user_id=user_id, subject_id=subject.subject_id))
+        return {
+            "message": f"Готово. Теперь вы будете получать уведомления по адресу:\n{subject.title}",
+            "keyboard": self._subscription_keyboard(user_id),
+        }
+
+    def _active_subjects(self, user_id: str) -> list[tuple[Subscription, Any]]:
+        items = []
+        for subscription in self.list_uc.execute(user_id):
+            subject = self.subjects.get_by_id(subscription.subject_id)
+            if subject and subject.is_active:
+                items.append((subscription, subject))
+        return items
+
+    def _list_subscriptions(self, user_id: str) -> dict:
+        items = self._active_subjects(user_id)
+        if not items:
+            return {
+                "message": "У вас пока нет адресов. Чтобы добавить адрес, откройте QR-код подъезда и нажмите «Подписаться в MAX».",
+                "keyboard": self._main_keyboard(),
+            }
+        lines = ["Ваши адреса:"]
+        for number, (_, subject) in enumerate(items, start=1):
+            lines.append(f"{number}. {subject.title}")
+        lines.append("")
+        lines.append("Чтобы отключить один адрес, нажмите кнопку ниже или напишите «Отписаться 1».")
+        return {"message": "\n".join(lines), "keyboard": self._subscription_keyboard(user_id)}
+
+    def _subscription_keyboard(self, user_id: str) -> list[list[dict]]:
+        items = self._active_subjects(user_id)
+        buttons = [[{"type": "message", "text": f"Отписаться {number}"}] for number, _ in enumerate(items, start=1)]
+        buttons.append([{"type": "message", "text": "Мои адреса"}, {"type": "message", "text": "Отключить все"}])
+        buttons.append([{"type": "message", "text": "Подписаться"}, {"type": "message", "text": "Помощь"}])
+        return buttons
+
+    def _unsubscribe_target(self, text: str) -> str | None:
+        stripped = text.strip()
+        lowered = self._normalize(stripped)
+        prefixes = ("отписаться ", "удалить ", "отключить ", "/unsubscribe ", "unsubscribe ")
+        for prefix in prefixes:
+            if lowered.startswith(prefix):
+                return stripped[len(prefix) :].strip()
+        return None
+
+    def _unsubscribe_help(self, user_id: str) -> dict:
+        items = self._active_subjects(user_id)
+        if not items:
+            return {"message": "Активных подписок пока нет.", "keyboard": self._main_keyboard()}
+        return self._list_subscriptions(user_id)
+
+    def _unsubscribe(self, user_id: str, target: str) -> dict:
+        items = self._active_subjects(user_id)
+        if not items:
+            return {"message": "Активных подписок пока нет.", "keyboard": self._main_keyboard()}
+        subject = None
+        if target.isdigit():
+            index = int(target)
+            if 1 <= index <= len(items):
+                subject = items[index - 1][1]
+        else:
+            subject = self.subjects.get_by_public_code(target)
+        if not subject:
+            return {
+                "message": "Не понял, какой адрес отключить. Нажмите «Мои адреса» и выберите номер из списка.",
+                "keyboard": self._subscription_keyboard(user_id),
+            }
+        self.subscriptions.deactivate(user_id, subject.subject_id)
+        return {"message": f"Отключил уведомления по адресу:\n{subject.title}", "keyboard": self._subscription_keyboard(user_id)}
 
 
 class _Mock:

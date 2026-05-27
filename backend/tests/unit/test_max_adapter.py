@@ -19,10 +19,10 @@ class FakeMaxClient:
         self.sent_text = []
         self.sent_img = []
 
-    async def send_text(self, chat_id, text):
+    async def send_text(self, chat_id, text, keyboard=None):
         if self.fail_text:
             raise RuntimeError("api error")
-        self.sent_text.append((chat_id, text))
+        self.sent_text.append((chat_id, text, keyboard))
 
     async def send_with_image(self, chat_id, text, image_bytes):
         if self.fail_image:
@@ -45,6 +45,17 @@ def test_send_text_only_notification():
     payload = NotificationPayload(user_id="u1", channel="max", title="T", body="B", metadata={})
     channel.send(payload)
     assert len(client.sent_text) == 1
+
+
+def test_send_text_with_keyboard():
+    client = FakeMaxClient()
+    channel = MaxNotificationChannel(client)
+    from domain.entities.models import NotificationPayload
+
+    keyboard = [[{"type": "message", "text": "Мои адреса"}]]
+    payload = NotificationPayload(user_id="u1", channel="max", title="", body="B", metadata={"keyboard": keyboard})
+    channel.send(payload)
+    assert client.sent_text == [("u1", "B", keyboard)]
 
 
 def test_image_failure_still_sends_text():

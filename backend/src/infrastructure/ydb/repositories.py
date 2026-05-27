@@ -148,20 +148,44 @@ class YdbSubjectRepository(SubjectRepository):
         return row
 
     def _map_entrance(self, row: dict) -> Subject:
-        title = f"Подъезд {row.get('entrance_number', '')}".strip()
+        building = f" к{row['building']}" if row.get("building") else ""
+        if row.get("city") and row.get("street") and row.get("house_number"):
+            title = f"{row['city']}, {row['street']} {row['house_number']}{building}, подъезд {row.get('entrance_number', '')}"
+        else:
+            title = f"Подъезд {row.get('entrance_number', '')}".strip()
         return Subject(subject_id=row["id"], subject_type=SubjectType.ENTRANCE, title=title, is_active=row.get("is_active", True), external_ref=row.get("regioncity_external_ref"))
 
     def get_by_id(self, subject_id: str) -> Subject | None:
-        rows = self.session.execute("SELECT * FROM entrances WHERE id=$id LIMIT 1", {"$id": subject_id})
+        rows = self.session.execute(
+            """
+            SELECT e.id AS id,
+                   e.entrance_number AS entrance_number,
+                   e.regioncity_external_ref AS regioncity_external_ref,
+                   e.is_active AS is_active,
+                   h.city AS city,
+                   h.street AS street,
+                   h.house_number AS house_number,
+                   h.building AS building
+            FROM entrances AS e
+            INNER JOIN houses AS h ON h.id = e.house_id
+            INNER JOIN districts AS d ON d.id = h.district_id
+            WHERE e.id=$id
+              AND e.is_active=true
+              AND h.is_active=true
+              AND d.is_active=true
+            LIMIT 1
+            """,
+            {"$id": subject_id},
+        )
         return self._map_entrance(rows[0]) if rows else None
 
     def get_by_public_code(self, public_code: str) -> Subject | None:
-        rows = self.session.execute("SELECT * FROM entrances VIEW idx_public_code WHERE public_code=$code AND is_active=true LIMIT 1", {"$code": public_code})
-        return self._map_entrance(rows[0]) if rows else None
+        rows = self.session.execute("SELECT id FROM entrances VIEW idx_public_code WHERE public_code=$code AND is_active=true LIMIT 1", {"$code": public_code})
+        return self.get_by_id(rows[0]["id"]) if rows else None
 
     def find_by_external_ref(self, external_ref: str) -> Subject | None:
-        rows = self.session.execute("SELECT * FROM entrances VIEW idx_regioncity_external_ref WHERE regioncity_external_ref=$ref AND is_active=true LIMIT 1", {"$ref": external_ref})
-        return self._map_entrance(rows[0]) if rows else None
+        rows = self.session.execute("SELECT id FROM entrances VIEW idx_regioncity_external_ref WHERE regioncity_external_ref=$ref AND is_active=true LIMIT 1", {"$ref": external_ref})
+        return self.get_by_id(rows[0]["id"]) if rows else None
 
     def list_active(self) -> list[Subject]:
         rows = self.session.execute("SELECT * FROM entrances WHERE is_active=true")

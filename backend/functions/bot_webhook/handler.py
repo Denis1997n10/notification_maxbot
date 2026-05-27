@@ -41,7 +41,10 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if container.bot_reply_channel and result.get("message"):
         user_id = MaxWebhookParser().external_user_id(payload)
         if user_id:
+            metadata = {}
+            if result.get("keyboard"):
+                metadata["keyboard"] = result["keyboard"]
             container.bot_reply_channel.send(
-                NotificationPayload(user_id=user_id, channel="max", title="", body=result["message"])
+                NotificationPayload(user_id=user_id, channel="max", title="", body=result["message"], metadata=metadata)
             )
     return api_response(200, result)

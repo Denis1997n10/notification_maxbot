@@ -15,10 +15,11 @@ class MaxNotificationChannel(NotificationChannel):
     def send(self, payload: NotificationPayload) -> None:
         text = f"{payload.title}\n\n{payload.body}" if payload.title else payload.body
         image_bytes = payload.metadata.get("image_bytes") if payload.metadata else None
+        keyboard = payload.metadata.get("keyboard") if payload.metadata else None
         if image_bytes:
             try:
                 asyncio.run(self._client.send_with_image(payload.user_id, text, image_bytes))
                 return
             except MaxImageError:
                 pass
-        asyncio.run(self._client.send_text(payload.user_id, text))
+        asyncio.run(self._client.send_text(payload.user_id, text, keyboard=keyboard))
