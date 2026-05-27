@@ -70,7 +70,12 @@ require_var ADMIN_BUCKET_NAME
 
 export PUBLIC_BUCKET_NAME ADMIN_BUCKET_NAME
 export ENV="$env" YDB_ENDPOINT YDB_DATABASE
-export PYTHONPATH="$ROOT_DIR/backend/src"
+LOCAL_RUNTIME_PATH="$ROOT_DIR/.build/functions/admin_api"
+[[ -d "$LOCAL_RUNTIME_PATH/ydb" ]] || {
+  echo "Built function runtime is missing YDB dependencies: $LOCAL_RUNTIME_PATH"
+  exit 1
+}
+export PYTHONPATH="$LOCAL_RUNTIME_PATH"
 export API_BASE_URL="https://${API_DOMAIN}"
 YDB_ACCESS_TOKEN_CREDENTIALS="$(yc iam create-token)"
 require_var YDB_ACCESS_TOKEN_CREDENTIALS

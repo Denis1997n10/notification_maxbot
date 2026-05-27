@@ -11,8 +11,9 @@ class YdbConfig:
 
 
 class YdbSession:
-    def __init__(self, pool) -> None:
-        self._pool = pool
+    def __init__(self, query_pool, scheme_pool) -> None:
+        self._query_pool = query_pool
+        self._scheme_pool = scheme_pool
 
     def execute(self, query: str, parameters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         import ydb
@@ -30,7 +31,10 @@ class YdbSession:
                     rows.append(dict(row))
             return rows
 
-        return self._pool.retry_operation_sync(_query)
+        return self._query_pool.retry_operation_sync(_query)
+
+    def execute_scheme(self, query: str) -> None:
+        self._scheme_pool.retry_operation_sync(lambda session: session.execute_scheme(query))
 
 
 class YdbClient:
@@ -44,7 +48,8 @@ class YdbClient:
             credentials=ydb.credentials_from_env_variables(),
         )
         self._driver.wait(fail_fast=True, timeout=10)
-        self._pool = ydb.QuerySessionPool(self._driver)
+        self._query_pool = ydb.QuerySessionPool(self._driver)
+        self._scheme_pool = ydb.SessionPool(self._driver)
 
     def session(self) -> YdbSession:
-        return YdbSession(self._pool)
+        return YdbSession(self._query_pool, self._scheme_pool)

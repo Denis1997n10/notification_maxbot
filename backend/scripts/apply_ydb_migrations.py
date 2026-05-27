@@ -28,7 +28,7 @@ def main() -> None:
     client = YdbClient(YdbConfig(endpoint=settings.ydb_endpoint, database=settings.ydb_database))
     session = client.session()
 
-    session.execute(
+    session.execute_scheme(
         """
         CREATE TABLE IF NOT EXISTS schema_migrations (
           id Utf8,
@@ -48,7 +48,7 @@ def main() -> None:
 
         sql = migration.read_text(encoding="utf-8")
         print(f"apply {migration.name}")
-        session.execute(sql)
+        session.execute_scheme(sql)
         session.execute(
             "UPSERT INTO schema_migrations (id, applied_at) VALUES ($id, $applied_at)",
             {
