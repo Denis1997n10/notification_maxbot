@@ -37,6 +37,19 @@ for fn in "${FUNCTIONS[@]}"; do
     find . -type f | LC_ALL=C sort > "$DIST_DIR/${fn}.manifest"
     zip -X -q -r "$DIST_DIR/${fn}.zip" .
   )
+
+  python3 - "$DIST_DIR/${fn}.zip" <<'PY'
+from sys import argv
+from zipfile import ZipFile
+
+with ZipFile(argv[1]) as archive:
+    names = set(archive.namelist())
+
+required = {"handler.py", "composition/container.py"}
+missing = sorted(required - names)
+if missing:
+    raise SystemExit(f"{argv[1]} is missing ZIP-root application files: {missing}")
+PY
 done
 
 (

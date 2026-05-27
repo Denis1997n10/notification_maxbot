@@ -6,7 +6,7 @@ import logging
 import httpx
 
 from domain.ports.interfaces import SecretProvider
-from infrastructure.max.errors import MaxImageError, MaxRequestError
+from infrastructure.max.errors import MaxRequestError
 
 
 class MaxClient:
@@ -17,28 +17,22 @@ class MaxClient:
         self._max_retries = max_retries
         self._logger = logging.getLogger(__name__)
 
-    async def send_text(self, chat_id: str, text: str) -> None:
-        await self._request("/messages/send", {"chat_id": chat_id, "text": text})
+    async def send_text(self, user_id: str, text: str) -> None:
+        await self._request("/messages", {"text": text}, params={"user_id": user_id})
 
-    async def send_with_image(self, chat_id: str, text: str, image_bytes: bytes | None) -> None:
-        if not image_bytes:
-            await self.send_text(chat_id, text)
-            return
-        try:
-            await self._request("/messages/sendWithAttachment", {"chat_id": chat_id, "text": text, "attachment": "binary"})
-        except Exception as exc:
-            self._logger.warning("max_image_send_failed_fallback_to_text", extra={"chat_id": chat_id, "error": str(type(exc).__name__)})
-            raise MaxImageError from exc
+    async def send_with_image(self, user_id: str, text: str, image_bytes: bytes | None) -> None:
+        # Attachment delivery remains disabled until a confirmed image source and MAX upload flow exist.
+        await self.send_text(user_id, text)
 
-    async def _request(self, path: str, json_body: dict) -> dict:
+    async def _request(self, path: str, json_body: dict, params: dict | None = None) -> dict:
         token = self._secret_provider.get_secret("MAX_BOT_TOKEN")
-        headers = {"Authorization": f"Bearer {token}"}
+        headers = {"Authorization": token}
         url = f"{self._base_url}{path}"
         last_error = None
         for attempt in range(self._max_retries + 1):
             try:
                 async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-                    resp = await client.post(url, headers=headers, json=json_body)
+                    resp = await client.post(url, headers=headers, params=params, json=json_body)
                 if resp.status_code == 429 or resp.status_code >= 500:
                     raise MaxRequestError(f"retryable {resp.status_code}")
                 resp.raise_for_status()

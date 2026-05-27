@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 TFVARS="infra/terraform/env/dev.auto.tfvars"
 [[ -f "$TFVARS" ]] || { echo "Missing $TFVARS. Run bootstrap first."; exit 1; }
+
+bash scripts/create_lockbox_secrets.sh dev
+
 python3 - <<'PY'
 from pathlib import Path
 p = Path('infra/terraform/env/dev.auto.tfvars')
@@ -17,7 +21,7 @@ if 'enable_polling_timer' in t:
 else:
     t += '\nenable_polling_timer = false\n'
 p.write_text(t, encoding='utf-8')
-print('Updated dev.auto.tfvars')
+print('Updated dev.auto.tfvars: function_use_mocks=false, enable_polling_timer=false')
 PY
 echo "Next steps:"
 echo "  bash scripts/deploy_all.sh dev"

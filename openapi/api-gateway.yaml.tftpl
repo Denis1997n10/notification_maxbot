@@ -5,7 +5,8 @@ info:
 x-yc-apigateway:
   cors:
     origin:
-      - "*"
+      - "${public_origin}"
+      - "${admin_origin}"
     methods: [GET, POST, PATCH, DELETE, OPTIONS]
     allowedHeaders: [Content-Type, Authorization]
 paths:
@@ -109,15 +110,6 @@ paths:
         '200':
           description: ok
   /api/v1/admin/test-notification:
-    post:
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${admin_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
-      responses:
-        '200':
-          description: ok
-  /api/v1/admin/test-cleaning-event:
     post:
       x-yc-apigateway-integration:
         type: cloud_functions

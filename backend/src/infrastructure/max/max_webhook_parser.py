@@ -2,8 +2,26 @@ from __future__ import annotations
 
 
 class MaxWebhookParser:
+    def message_text(self, payload: dict) -> str:
+        message = payload.get("message") or {}
+        body = message.get("body") or {}
+        return str(body.get("text") or message.get("text") or payload.get("text") or "").strip()
+
+    def external_user_id(self, payload: dict) -> str:
+        message = payload.get("message") or {}
+        sender = message.get("sender") or {}
+        user = payload.get("user") or {}
+        return str(
+            sender.get("user_id")
+            or user.get("user_id")
+            or user.get("id")
+            or payload.get("user_id")
+            or payload.get("chat_id")
+            or ""
+        )
+
     def parse_start_public_code(self, payload: dict) -> str | None:
-        text = ((payload.get("message") or {}).get("text") or payload.get("text") or "").strip()
+        text = self.message_text(payload)
         if text.startswith("/start "):
             return text.split(" ", 1)[1]
         return None
@@ -12,7 +30,7 @@ class MaxWebhookParser:
         callback = (payload.get("callback") or {}).get("data")
         if callback:
             return callback
-        text = ((payload.get("message") or {}).get("text") or payload.get("text") or "").strip()
+        text = self.message_text(payload)
         if text in {"my_subscriptions", "add_address", "remove_subscription", "disable_all", "services", "help"}:
             return text
         return None

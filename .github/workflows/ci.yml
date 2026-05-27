@@ -14,11 +14,11 @@ jobs:
         with: {node-version: '20'}
       - run: cd frontend/public-site && npm ci && npm run build
       - run: cd frontend/admin-panel && npm ci && npm run build
+      - run: bash backend/scripts/build_functions.sh dev
       - uses: hashicorp/setup-terraform@v3
       - run: cd infra/terraform && terraform fmt -check && terraform init -backend=false && terraform validate
       - run: python backend/scripts/validate_openapi.py
       - run: python backend/scripts/architecture_guard.py
-      - run: bash backend/scripts/build_functions.sh dev
       - uses: actions/upload-artifact@v4
         with:
           name: function-artifacts

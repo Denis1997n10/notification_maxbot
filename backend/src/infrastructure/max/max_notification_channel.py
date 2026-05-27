@@ -13,7 +13,7 @@ class MaxNotificationChannel(NotificationChannel):
         self._client = client
 
     def send(self, payload: NotificationPayload) -> None:
-        text = f"{payload.title}\n\n{payload.body}"
+        text = f"{payload.title}\n\n{payload.body}" if payload.title else payload.body
         image_bytes = payload.metadata.get("image_bytes") if payload.metadata else None
         if image_bytes:
             try:

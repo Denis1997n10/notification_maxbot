@@ -12,6 +12,10 @@ class CodeTemplateProvider(TemplateProvider):
                 "Сервисы",
                 "Раздел сервисов пока в разработке",
             ),
+            ("notification.test", "max"): (
+                "Тестовое уведомление",
+                "Проверка уведомлений: {subject_title}",
+            ),
         }
 
     def render(self, template_key: str, channel: str, context: dict) -> tuple[str, str]:

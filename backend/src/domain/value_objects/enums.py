@@ -18,7 +18,9 @@ class AdminRole(str, Enum):
 
 class Source(str, Enum):
     REGIONCITY = "regioncity"
+    SYSTEM = "system"
 
 
 class EventType(str, Enum):
     CLEANING_COMPLETED = "cleaning.completed"
+    TEST_NOTIFICATION = "notification.test"

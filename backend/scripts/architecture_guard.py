@@ -20,8 +20,9 @@ for p in Path('backend/functions').rglob('handler.py'):
 full = '\n'.join(Path('.').rglob('*').__class__.__name__ for _ in [0])
 # direct file scans
 repo_text = ''
+this_script = Path(__file__).resolve()
 for p in Path('backend').rglob('*'):
-    if p.is_file() and p.suffix in {'.py', '.sql', '.md', '.tf', '.yaml', '.yml'}:
+    if p.is_file() and p.resolve() != this_script and p.suffix in {'.py', '.sql', '.md', '.tf', '.yaml', '.yml'}:
         repo_text += '\n' + p.read_text(errors='ignore')
 
 checks += [

@@ -58,8 +58,10 @@ def test_image_failure_still_sends_text():
 
 def test_start_payload_parsed():
     parser = MaxWebhookParser()
-    code = parser.parse_start_public_code({"message": {"text": "/start ABC123"}})
+    payload = {"message": {"sender": {"user_id": 42}, "body": {"text": "/start ABC123"}}}
+    code = parser.parse_start_public_code(payload)
     assert code == "ABC123"
+    assert parser.external_user_id(payload) == "42"
 
 
 def test_services_placeholder_rendered_when_disabled():

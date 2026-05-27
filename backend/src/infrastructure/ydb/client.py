@@ -41,7 +41,7 @@ class YdbClient:
         self._driver = ydb.Driver(
             endpoint=config.endpoint,
             database=config.database,
-            credentials=ydb.construct_credentials_from_environ(),
+            credentials=ydb.credentials_from_env_variables(),
         )
         self._driver.wait(fail_fast=True, timeout=10)
         self._pool = ydb.QuerySessionPool(self._driver)

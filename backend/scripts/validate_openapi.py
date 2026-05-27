@@ -8,6 +8,7 @@ rendered = Template(tpl).substitute(
     bot_webhook_function_id='f1',
     public_api_function_id='f2',
     admin_api_function_id='f3',
+    gateway_service_account_id='sa1',
     public_origin='https://public.example.com',
     admin_origin='https://admin.example.com',
 )
@@ -20,7 +21,8 @@ required = [
 '/api/v1/public/districts/{districtId}/houses',
 '/api/v1/public/houses/{houseId}/entrances',
 '/api/v1/admin/auth/login',
-'/api/v1/admin/{proxy+}',
+'/api/v1/admin/me',
+'/api/v1/admin/test-notification',
 ]
 for p in required:
     assert p in spec['paths'], p

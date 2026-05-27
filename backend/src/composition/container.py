@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+import base64
+from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
 import json
 import os
+import secrets
 from typing import Any
 from uuid import uuid4
 
@@ -17,10 +19,13 @@ from application.use_cases.use_cases import (
     SubscribeUserToSubjectUseCase,
 )
 from config.settings import load_settings
-from domain.entities.models import Subscription
+from domain.entities.models import Subscription, TaskEvent
+from domain.ports.interfaces import SecretProvider
+from domain.value_objects.enums import EventType, Source
 from infrastructure.lockbox.secret_provider import YandexLockboxSecretProvider
 from infrastructure.max.max_client import MaxClient
 from infrastructure.max.max_notification_channel import MaxNotificationChannel
+from infrastructure.max.max_webhook_parser import MaxWebhookParser
 from infrastructure.ydb.client import YdbClient, YdbConfig
 from infrastructure.ydb.repositories import (
     YdbAdminPermissionRepository,
@@ -48,6 +53,7 @@ class AppContainer:
     admin_service: Any
     polling_use_case: Any
     notification_service: Any
+    bot_reply_channel: Any | None = None
 
 
 class PublicService:
@@ -80,29 +86,55 @@ class PublicService:
 
 
 class AdminService:
-    def __init__(self, admin_repo: YdbAdminUserRepository, jwt_secret: str):
-        self.admin_repo = admin_repo
-        self.jwt_secret = jwt_secret.encode()
+    _PASSWORD_ITERATIONS = 600_000
 
-    def _hash_password(self, raw: str) -> str:
-        return hashlib.sha256(raw.encode()).hexdigest()
+    def __init__(self, admin_repo: YdbAdminUserRepository, secret_provider: SecretProvider, notifier: NotificationService, session: Any):
+        self.admin_repo = admin_repo
+        self.secret_provider = secret_provider
+        self.notifier = notifier
+        self.session = session
+
+    def hash_password(self, raw: str) -> str:
+        salt = secrets.token_bytes(16)
+        digest = hashlib.pbkdf2_hmac("sha256", raw.encode(), salt, self._PASSWORD_ITERATIONS)
+        return "pbkdf2_sha256${}${}${}".format(
+            self._PASSWORD_ITERATIONS,
+            base64.urlsafe_b64encode(salt).decode(),
+            base64.urlsafe_b64encode(digest).decode(),
+        )
+
+    def _verify_password(self, raw: str, stored: str) -> bool:
+        if stored.startswith("pbkdf2_sha256$"):
+            _, iterations, encoded_salt, encoded_digest = stored.split("$", 3)
+            salt = base64.urlsafe_b64decode(encoded_salt.encode())
+            expected = base64.urlsafe_b64decode(encoded_digest.encode())
+            candidate = hashlib.pbkdf2_hmac("sha256", raw.encode(), salt, int(iterations))
+            return hmac.compare_digest(candidate, expected)
+        return hmac.compare_digest(stored, hashlib.sha256(raw.encode()).hexdigest())
+
+    def _jwt_secret(self) -> bytes:
+        return self.secret_provider.get_secret("ADMIN_JWT_SECRET").encode()
 
     def _issue(self, admin_id: str, role: str) -> str:
-        payload = json.dumps({"sub": admin_id, "role": role}, ensure_ascii=False)
-        sig = hmac.new(self.jwt_secret, payload.encode(), hashlib.sha256).hexdigest()
+        expires_at = int((datetime.now(UTC) + timedelta(hours=12)).timestamp())
+        payload = json.dumps({"sub": admin_id, "role": role, "exp": expires_at}, ensure_ascii=False)
+        sig = hmac.new(self._jwt_secret(), payload.encode(), hashlib.sha256).hexdigest()
         return f"{payload}.{sig}"
 
     def _verify(self, token: str) -> dict:
         payload, sig = token.rsplit(".", 1)
-        expected = hmac.new(self.jwt_secret, payload.encode(), hashlib.sha256).hexdigest()
+        expected = hmac.new(self._jwt_secret(), payload.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected):
             raise ValueError("invalid token")
-        return json.loads(payload)
+        data = json.loads(payload)
+        if int(data.get("exp", 0)) < int(datetime.now(UTC).timestamp()):
+            raise ValueError("expired token")
+        return data
 
     def login(self, body: str | dict | None):
         d = _parse_json(body)
         u = self.admin_repo.find_by_login(d.get("login", ""))
-        if not u or u["password_hash"] != self._hash_password(d.get("password", "")):
+        if not u or not self._verify_password(d.get("password", ""), u["password_hash"]):
             return {"error": "invalid_credentials"}
         return {"token": self._issue(u["id"], u["role"]), "role": u["role"]}
 
@@ -115,6 +147,23 @@ class AdminService:
         except Exception:
             return {"error": "unauthorized"}
 
+    def send_test_notification(self, headers: dict, body: str | dict | None) -> dict:
+        if "error" in self.me(headers):
+            return {"error": "unauthorized"}
+        data = _parse_json(body)
+        user_id = str(data.get("user_id") or "").strip()
+        if not user_id:
+            return {"error": "user_id_required"}
+        event = TaskEvent(
+            external_id=f"admin-test-{uuid4()}",
+            subject_id="admin-test",
+            source=Source.SYSTEM,
+            event_type=EventType.TEST_NOTIFICATION,
+            occurred_at=datetime.now(UTC),
+            metadata={"subject_title": str(data.get("subject_title") or "test subject")},
+        )
+        return {"sent": self.notifier.notify_users(event, [user_id])}
+
 
 class BotService:
     def __init__(self, users, subjects, subscriptions, sub_uc, list_uc, disable_uc):
@@ -124,10 +173,11 @@ class BotService:
         self.sub_uc = sub_uc
         self.list_uc = list_uc
         self.disable_uc = disable_uc
+        self.webhook_parser = MaxWebhookParser()
 
     def handle_payload(self, payload: dict):
-        text = ((payload.get("message") or {}).get("text") or payload.get("text") or "").strip()
-        ext_user = str((payload.get("user") or {}).get("id") or payload.get("user_id") or payload.get("chat_id") or "unknown")
+        text = self.webhook_parser.message_text(payload)
+        ext_user = self.webhook_parser.external_user_id(payload) or "unknown"
         user = self.users.get_or_create_channel_user("max", ext_user, (payload.get("user") or {}).get("name", ""))
 
         if text.startswith("/start"):
@@ -212,9 +262,10 @@ def build_container() -> AppContainer:
             DisableAllUserNotificationsUseCase(subscriptions),
         ),
         public_service=PublicService(subjects),
-        admin_service=AdminService(admin_users, os.getenv("ADMIN_JWT_SECRET", "dev-secret")),
+        admin_service=AdminService(admin_users, secret, notifier, session),
         polling_use_case=_Mock(),
         notification_service=notifier,
+        bot_reply_channel=max_channel,
     )
 
 

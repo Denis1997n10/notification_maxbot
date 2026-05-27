@@ -4,3 +4,8 @@ release/
 dist/
 
 .local/
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/backend-*.hcl
+infra/terraform/env/*.auto.tfvars

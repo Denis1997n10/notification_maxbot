@@ -7,6 +7,7 @@ function App(){
   const [token,setToken]=React.useState(localStorage.getItem('jwt')||'')
   const [role,setRole]=React.useState('')
   const [msg,setMsg]=React.useState('')
+  const [testUserId,setTestUserId]=React.useState('')
 
   async function login(e){
     e.preventDefault()
@@ -19,6 +20,16 @@ function App(){
   async function loadMe(){
     const r=await fetch(`${API}/api/v1/admin/me`,{headers:{Authorization:`Bearer ${token}`}})
     if(r.ok){const d=await r.json(); setRole(d.role||'')}
+  }
+
+  async function sendTestNotification(){
+    const r=await fetch(`${API}/api/v1/admin/test-notification`,{
+      method:'POST',
+      headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:testUserId,subject_title:'Test entrance'})
+    })
+    const d=await r.json()
+    setMsg(d.sent ? 'Test notification sent' : `Test notification failed: ${d.error || 'not sent'}`)
   }
 
   React.useEffect(()=>{ if(token) loadMe() },[token])
@@ -34,7 +45,7 @@ function App(){
     {superAdmin && <>
       <section><h2>Admin users</h2><button>Управлять администраторами</button></section>
       <section><h2>Feature flags</h2><button>Управлять фичами</button></section>
-      <section><h2>Test notification</h2><button>Отправить тест</button></section>
+      <section><h2>Test notification</h2><input value={testUserId} onChange={e=>setTestUserId(e.target.value)} placeholder='MAX user ID'/><button onClick={sendTestNotification}>Send test</button><p>{msg}</p></section>
     </>}
     {!superAdmin && <p>Доступны только назначенные районы.</p>}
   </main>

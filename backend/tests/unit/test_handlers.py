@@ -20,7 +20,7 @@ class DummyPublicService:
 class DummyAdminService:
     def login(self, body): return {"token": "t"}
     def me(self, headers): return {"role": "super_admin"}
-    def send_test_notification(self, body): return {"sent": 1}
+    def send_test_notification(self, headers, body): return {"sent": 1}
 
 
 class DummyPolling:
@@ -75,6 +75,19 @@ def test_admin_api_routes(monkeypatch):
     resp = handler({"httpMethod": "POST", "path": "/api/v1/admin/auth/login", "body": "{}"}, None)
     assert resp["statusCode"] == 200
     assert "token" in json.loads(resp["body"])
+
+    resp = handler({"httpMethod": "POST", "path": "/api/v1/admin/test-notification", "headers": {}, "body": "{}"}, None)
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["sent"] == 1
+
+
+def test_bot_webhook_rejects_invalid_secret(monkeypatch):
+    monkeypatch.setenv("ENV", "prod")
+    monkeypatch.setenv("MAX_WEBHOOK_SECRET", "expected")
+    from functions.bot_webhook.handler import handler
+
+    resp = handler({"headers": {"X-Max-Bot-Api-Secret": "invalid"}, "body": "{}"}, None)
+    assert resp["statusCode"] == 401
 
 
 def test_regioncity_polling_handler(monkeypatch):

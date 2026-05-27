@@ -9,13 +9,6 @@ jobs:
     runs-on: [self-hosted, linux, rn-prod-builder]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: '3.12'}
-      - run: pip install -r backend/requirements-dev.txt
-      - run: bash backend/scripts/build_functions.sh prod
-      - uses: hashicorp/setup-terraform@v3
-      - run: cd infra/terraform && terraform init && terraform apply -auto-approve -var-file=prod.tfvars
-      - run: python backend/scripts/apply_ydb_migrations.py
-      - run: bash backend/scripts/deploy_functions.sh prod
-      - run: bash backend/scripts/deploy_api_gateway.sh prod
-      - run: bash backend/scripts/upload_static.sh prod
+      - run: |
+          echo "Automated production mutation is disabled until an explicit approval and secrets flow is configured."
+          echo "Use the protected local flow after review: bash scripts/deploy_all.sh prod"

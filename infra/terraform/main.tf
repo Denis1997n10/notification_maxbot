@@ -25,6 +25,51 @@ locals {
   admin_api_zip_path          = "../../dist/functions/admin_api.zip"
   regioncity_polling_zip_path = "../../dist/functions/regioncity_polling.zip"
 
+  bot_secrets = var.function_use_mocks ? [] : [
+    {
+      id                   = var.max_bot_token_secret_id
+      version_id           = var.max_bot_token_secret_version_id
+      key                  = "MAX_BOT_TOKEN"
+      environment_variable = "MAX_BOT_TOKEN"
+    },
+    {
+      id                   = var.max_webhook_secret_id
+      version_id           = var.max_webhook_secret_version_id
+      key                  = "MAX_WEBHOOK_SECRET"
+      environment_variable = "MAX_WEBHOOK_SECRET"
+    },
+  ]
+
+  admin_secrets = var.function_use_mocks ? [] : [
+    {
+      id                   = var.max_bot_token_secret_id
+      version_id           = var.max_bot_token_secret_version_id
+      key                  = "MAX_BOT_TOKEN"
+      environment_variable = "MAX_BOT_TOKEN"
+    },
+    {
+      id                   = var.admin_jwt_secret_id
+      version_id           = var.admin_jwt_secret_version_id
+      key                  = "ADMIN_JWT_SECRET"
+      environment_variable = "ADMIN_JWT_SECRET"
+    },
+  ]
+
+  polling_secrets = var.function_use_mocks ? [] : [
+    {
+      id                   = var.regioncity_api_token_secret_id
+      version_id           = var.regioncity_api_token_secret_version_id
+      key                  = "REGIONCITY_API_TOKEN"
+      environment_variable = "REGIONCITY_API_TOKEN"
+    },
+    {
+      id                   = var.max_bot_token_secret_id
+      version_id           = var.max_bot_token_secret_version_id
+      key                  = "MAX_BOT_TOKEN"
+      environment_variable = "MAX_BOT_TOKEN"
+    },
+  ]
+
   common_env = {
     ENV                        = var.environment
     REGIONCITY_BASE_URL        = var.regioncity_base_url
@@ -35,8 +80,9 @@ locals {
     POLLING_INTERVAL_MINUTES   = tostring(var.polling_interval_minutes)
     POLLING_OVERLAP_MINUTES    = tostring(var.polling_overlap_minutes)
     MAX_SUBSCRIPTIONS_PER_USER = tostring(var.max_subscriptions_per_user)
-    YDB_ENDPOINT               = yandex_ydb_database_serverless.db.document_api_endpoint
+    YDB_ENDPOINT               = yandex_ydb_database_serverless.db.ydb_api_endpoint
     YDB_DATABASE               = yandex_ydb_database_serverless.db.database_path
+    YDB_METADATA_CREDENTIALS   = "1"
 
     REGIONCITY_API_TOKEN_SECRET_ID = var.regioncity_api_token_secret_id
     MAX_BOT_TOKEN_SECRET_ID        = var.max_bot_token_secret_id
@@ -81,12 +127,32 @@ resource "yandex_storage_bucket" "public_site" {
   bucket        = var.bucket_public_name
   folder_id     = var.folder_id
   force_destroy = true
+
+  anonymous_access_flags {
+    read = true
+    list = false
+  }
+
+  website {
+    index_document = "index.html"
+    error_document = "index.html"
+  }
 }
 
 resource "yandex_storage_bucket" "admin_panel" {
   bucket        = var.bucket_admin_name
   folder_id     = var.folder_id
   force_destroy = true
+
+  anonymous_access_flags {
+    read = true
+    list = false
+  }
+
+  website {
+    index_document = "index.html"
+    error_document = "index.html"
+  }
 }
 
 resource "yandex_storage_bucket" "release_artifacts" {
@@ -137,6 +203,16 @@ resource "yandex_function" "bot_webhook" {
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
+  dynamic "secrets" {
+    for_each = local.bot_secrets
+    content {
+      id                   = secrets.value.id
+      version_id           = secrets.value.version_id
+      key                  = secrets.value.key
+      environment_variable = secrets.value.environment_variable
+    }
+  }
+
   package {
     bucket_name = yandex_storage_object.bot_webhook_zip.bucket
     object_name = yandex_storage_object.bot_webhook_zip.key
@@ -171,6 +247,16 @@ resource "yandex_function" "admin_api" {
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
 
+  dynamic "secrets" {
+    for_each = local.admin_secrets
+    content {
+      id                   = secrets.value.id
+      version_id           = secrets.value.version_id
+      key                  = secrets.value.key
+      environment_variable = secrets.value.environment_variable
+    }
+  }
+
   package {
     bucket_name = yandex_storage_object.admin_api_zip.bucket
     object_name = yandex_storage_object.admin_api_zip.key
@@ -187,6 +273,16 @@ resource "yandex_function" "regioncity_polling" {
   execution_timeout  = tostring(var.function_timeout_seconds)
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
+
+  dynamic "secrets" {
+    for_each = local.polling_secrets
+    content {
+      id                   = secrets.value.id
+      version_id           = secrets.value.version_id
+      key                  = secrets.value.key
+      environment_variable = secrets.value.environment_variable
+    }
+  }
 
   package {
     bucket_name = yandex_storage_object.regioncity_polling_zip.bucket
@@ -227,7 +323,7 @@ output "api_gateway_domain" {
 }
 
 output "ydb_endpoint" {
-  value = yandex_ydb_database_serverless.db.document_api_endpoint
+  value = yandex_ydb_database_serverless.db.ydb_api_endpoint
 }
 
 output "ydb_database" {
@@ -239,11 +335,11 @@ output "function_service_account_id" {
 }
 
 output "public_site_url" {
-  value = var.public_site_url
+  value = yandex_storage_bucket.public_site.website_endpoint
 }
 
 output "admin_site_url" {
-  value = var.admin_site_url
+  value = yandex_storage_bucket.admin_panel.website_endpoint
 }
 
 output "public_bucket_name" {

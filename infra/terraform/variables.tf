@@ -1,9 +1,19 @@
 variable "cloud_id" {
   type = string
+
+  validation {
+    condition     = length(trimspace(var.cloud_id)) > 0
+    error_message = "cloud_id must not be empty. Generate the environment configuration with scripts/bootstrap_yc.sh."
+  }
 }
 
 variable "folder_id" {
   type = string
+
+  validation {
+    condition     = length(trimspace(var.folder_id)) > 0
+    error_message = "folder_id must not be empty. Generate the environment configuration with scripts/bootstrap_yc.sh."
+  }
 }
 
 variable "zone" {
@@ -13,6 +23,11 @@ variable "zone" {
 
 variable "environment" {
   type = string
+
+  validation {
+    condition     = contains(["dev", "prod"], var.environment)
+    error_message = "environment must be either dev or prod."
+  }
 }
 
 variable "project_name" {
@@ -113,12 +128,37 @@ variable "regioncity_api_token_secret_id" {
   type = string
 }
 
+variable "regioncity_api_token_secret_version_id" {
+  type    = string
+  default = ""
+}
+
 variable "max_bot_token_secret_id" {
   type = string
 }
 
+variable "max_bot_token_secret_version_id" {
+  type    = string
+  default = ""
+}
+
 variable "admin_jwt_secret_id" {
   type = string
+}
+
+variable "admin_jwt_secret_version_id" {
+  type    = string
+  default = ""
+}
+
+variable "max_webhook_secret_id" {
+  type    = string
+  default = ""
+}
+
+variable "max_webhook_secret_version_id" {
+  type    = string
+  default = ""
 }
 
 variable "release_artifacts_bucket_name" {

@@ -9,4 +9,4 @@ jobs:
     runs-on: [self-hosted, linux, rn-prod-builder]
     steps:
       - uses: actions/checkout@v4
-      - run: echo "deploy-dev from CI is disabled until runner-side .local/dev and secrets are configured; use local flow: yc init && ./scripts/bootstrap_yc.sh dev && ./scripts/deploy_all.sh dev"
+      - run: echo "deploy-dev from CI is disabled until runner-side Yandex Cloud access is configured; use local flow after yc init: bash scripts/deploy_all.sh dev"

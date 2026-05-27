@@ -8,7 +8,7 @@ if [[ -z "$ACTION" || ! "$ACTION" =~ ^(list|set|delete)$ ]]; then
   cat <<'USAGE'
 Usage:
   MAX_BOT_TOKEN='<token>' bash scripts/max_webhook.sh list
-  MAX_BOT_TOKEN='<token>' bash scripts/max_webhook.sh set [webhook_url]
+  MAX_BOT_TOKEN='<token>' MAX_WEBHOOK_SECRET='<secret>' bash scripts/max_webhook.sh set [webhook_url]
   MAX_BOT_TOKEN='<token>' bash scripts/max_webhook.sh delete [webhook_url]
 
 If webhook_url is omitted for set/delete, the script tries to read the current API Gateway domain from Terraform outputs and uses:
@@ -16,7 +16,7 @@ If webhook_url is omitted for set/delete, the script tries to read the current A
 
 Examples:
   MAX_BOT_TOKEN='...' bash scripts/max_webhook.sh list
-  MAX_BOT_TOKEN='...' bash scripts/max_webhook.sh set
+  MAX_BOT_TOKEN='...' MAX_WEBHOOK_SECRET='...' bash scripts/max_webhook.sh set
   MAX_BOT_TOKEN='...' bash scripts/max_webhook.sh delete
 USAGE
   exit 1
@@ -44,11 +44,12 @@ case "$ACTION" in
 
   set)
     [[ -n "$WEBHOOK_URL" ]] || { echo "webhook_url is required for set"; exit 1; }
+    : "${MAX_WEBHOOK_SECRET:?MAX_WEBHOOK_SECRET env var is required for set}"
     echo "Setting MAX webhook subscription to: $WEBHOOK_URL"
     curl -sS -X POST "$API_BASE" \
       -H "Authorization: ${MAX_BOT_TOKEN}" \
       -H "Content-Type: application/json" \
-      -d "{\"url\":\"${WEBHOOK_URL}\"}"
+      -d "{\"url\":\"${WEBHOOK_URL}\",\"secret\":\"${MAX_WEBHOOK_SECRET}\"}"
     echo
     ;;
 
