@@ -80,7 +80,7 @@ locals {
     POLLING_INTERVAL_MINUTES   = tostring(var.polling_interval_minutes)
     POLLING_OVERLAP_MINUTES    = tostring(var.polling_overlap_minutes)
     MAX_SUBSCRIPTIONS_PER_USER = tostring(var.max_subscriptions_per_user)
-    YDB_ENDPOINT               = yandex_ydb_database_serverless.db.ydb_api_endpoint
+    YDB_ENDPOINT               = "grpcs://${yandex_ydb_database_serverless.db.ydb_api_endpoint}"
     YDB_DATABASE               = yandex_ydb_database_serverless.db.database_path
     YDB_METADATA_CREDENTIALS   = "1"
 
@@ -323,7 +323,7 @@ output "api_gateway_domain" {
 }
 
 output "ydb_endpoint" {
-  value = yandex_ydb_database_serverless.db.ydb_api_endpoint
+  value = "grpcs://${yandex_ydb_database_serverless.db.ydb_api_endpoint}"
 }
 
 output "ydb_database" {

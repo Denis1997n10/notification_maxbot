@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 
@@ -8,6 +9,19 @@ from typing import Any
 class YdbConfig:
     endpoint: str
     database: str
+
+
+def _normalize_endpoint(endpoint: str) -> str:
+    return endpoint if "://" in endpoint else f"grpcs://{endpoint}"
+
+
+def _typed_parameters(parameters: dict[str, Any] | None) -> dict[str, Any]:
+    import ydb
+
+    return {
+        name: ydb.TypedValue(value, ydb.PrimitiveType.Timestamp) if isinstance(value, datetime) else value
+        for name, value in (parameters or {}).items()
+    }
 
 
 class YdbSession:
@@ -19,10 +33,10 @@ class YdbSession:
         import ydb
 
         def _query(session) -> list[dict[str, Any]]:
-            tx = session.transaction(ydb.SerializableReadWrite()).begin()
+            tx = session.transaction(ydb.QuerySerializableReadWrite()).begin()
             result = tx.execute(
                 query,
-                parameters=parameters or {},
+                parameters=_typed_parameters(parameters),
                 commit_tx=True,
             )
             rows: list[dict[str, Any]] = []
@@ -43,7 +57,7 @@ class YdbClient:
         import ydb
 
         self._driver = ydb.Driver(
-            endpoint=config.endpoint,
+            endpoint=_normalize_endpoint(config.endpoint),
             database=config.database,
             credentials=ydb.credentials_from_env_variables(),
         )
