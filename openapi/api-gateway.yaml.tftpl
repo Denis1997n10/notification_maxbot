@@ -52,8 +52,47 @@ paths:
       responses:
         '200':
           description: ok
+  /api/v1/public/cities:
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${public_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/public/cities/{cityId}/districts:
+    get:
+      parameters:
+        - name: cityId
+          in: path
+          required: true
+          schema:
+            type: string
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${public_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
   /api/v1/public/districts:
     get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${public_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/public/districts/{districtId}/streets:
+    get:
+      parameters:
+        - name: districtId
+          in: path
+          required: true
+          schema:
+            type: string
       x-yc-apigateway-integration:
         type: cloud_functions
         function_id: "${public_api_function_id}"
@@ -76,6 +115,21 @@ paths:
       responses:
         '200':
           description: ok
+  /api/v1/public/streets/{streetId}/houses:
+    get:
+      parameters:
+        - name: streetId
+          in: path
+          required: true
+          schema:
+            type: string
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${public_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
   /api/v1/public/houses/{houseId}/entrances:
     get:
       parameters:
@@ -84,6 +138,15 @@ paths:
           required: true
           schema:
             type: string
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${public_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/public/miniapp/subscriptions:
+    post:
       x-yc-apigateway-integration:
         type: cloud_functions
         function_id: "${public_api_function_id}"

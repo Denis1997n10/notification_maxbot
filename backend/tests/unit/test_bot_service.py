@@ -59,7 +59,7 @@ class FakeSubscriptions:
         return len(active)
 
 
-def make_service():
+def make_service(public_site_url=""):
     users = FakeUsers()
     subjects = FakeSubjects()
     subscriptions = FakeSubscriptions()
@@ -70,6 +70,7 @@ def make_service():
         SubscribeUserToSubjectUseCase(subjects, subscriptions),
         ListUserSubscriptionsUseCase(subscriptions),
         DisableAllUserNotificationsUseCase(subscriptions),
+        public_site_url,
     )
 
 
@@ -89,7 +90,19 @@ def test_start_without_code_shows_menu():
     result = service.handle_payload({"message": {"sender": {"user_id": "42"}, "body": {"text": "/start"}}})
 
     assert "Как начать" in result["message"]
-    assert result["keyboard"][0][0]["text"] == "Мои адреса"
+    assert "Мои адреса" in str(result["keyboard"])
+
+
+def test_start_menu_can_open_address_picker():
+    service = make_service("https://public.example.com")
+
+    result = service.handle_payload({"message": {"sender": {"user_id": "42"}, "body": {"text": "/start"}}})
+
+    assert result["keyboard"][0][0] == {
+        "type": "link",
+        "text": "Выбрать адрес",
+        "url": "https://public.example.com/?view=select",
+    }
 
 
 def test_list_and_unsubscribe_by_number():

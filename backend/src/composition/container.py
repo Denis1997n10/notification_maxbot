@@ -25,6 +25,7 @@ from domain.value_objects.enums import EventType, Source
 from infrastructure.lockbox.secret_provider import YandexLockboxSecretProvider
 from infrastructure.max.max_client import MaxClient
 from infrastructure.max.max_notification_channel import MaxNotificationChannel
+from infrastructure.max.max_webapp_validator import MaxWebAppValidator
 from infrastructure.max.max_webhook_parser import MaxWebhookParser
 from infrastructure.ydb.client import YdbClient, YdbConfig
 from infrastructure.ydb.repositories import (
@@ -57,17 +58,72 @@ class AppContainer:
 
 
 class PublicService:
-    def __init__(self, subjects: YdbSubjectRepository):
+    def __init__(
+        self,
+        subjects: YdbSubjectRepository,
+        users: YdbUserRepository | None = None,
+        subscriptions: YdbSubscriptionRepository | None = None,
+        subscribe_uc: SubscribeUserToSubjectUseCase | None = None,
+        secret_provider: SecretProvider | None = None,
+    ):
         self.subjects = subjects
+        self.users = users
+        self.subscriptions = subscriptions
+        self.subscribe_uc = subscribe_uc
+        self.secret_provider = secret_provider
+
+    def list_cities(self):
+        return self.subjects.list_cities()
+
+    def list_city_districts(self, city_id: str):
+        city = self.subjects.get_city(city_id)
+        if not city or not city.get("is_active", True):
+            return []
+        return self.subjects.list_districts_by_city(city_id)
 
     def list_districts(self):
         return self.subjects.list_districts()
 
+    def list_streets(self, district_id: str):
+        district = self.subjects.get_district(district_id)
+        if not district or not district.get("is_active", True):
+            return []
+        return self.subjects.list_streets_by_district(district_id)
+
     def list_houses(self, district_id: str):
         return self.subjects.list_houses_by_district(district_id)
 
+    def list_street_houses(self, street_id: str):
+        street = self.subjects.get_street(street_id)
+        if not street or not street.get("is_active", True):
+            return []
+        return self.subjects.list_houses_by_street(street_id)
+
     def list_entrances(self, house_id: str):
         return self.subjects.list_entrances_by_house(house_id)
+
+    def subscribe_from_mini_app(self, body: str | dict | None) -> dict:
+        if not self.users or not self.subscriptions or not self.subscribe_uc or not self.secret_provider:
+            return {"error": "configuration_error"}
+        data = _parse_json(body)
+        public_code = str(data.get("public_code") or "").strip()
+        init_data = str(data.get("init_data") or "").strip()
+        if not public_code or not init_data:
+            return {"error": "required_fields", "fields": ["public_code", "init_data"]}
+        try:
+            user_data = MaxWebAppValidator(self.secret_provider.get_secret("MAX_BOT_TOKEN")).verify_user(init_data)
+        except Exception:
+            return {"error": "configuration_error"}
+        if not user_data:
+            return {"error": "unauthorized"}
+        subject = self.subjects.get_by_public_code(public_code)
+        if not subject:
+            return {"error": "not_found"}
+        user = self.users.get_or_create_channel_user("max", user_data.external_user_id, user_data.display_name)
+        if self.subscriptions.get_active(user.user_id, subject.subject_id):
+            return {"status": "already_subscribed", "subject": {"id": subject.subject_id, "title": subject.title}}
+        self.subscribe_uc.execute(Subscription(subscription_id=str(uuid4()), user_id=user.user_id, subject_id=subject.subject_id))
+        return {"status": "subscribed", "subject": {"id": subject.subject_id, "title": subject.title}}
 
     def get_entrance_page(self, public_code: str):
         data = self.subjects.get_entrance_page_data(public_code)
@@ -514,13 +570,14 @@ class AdminService:
 
 
 class BotService:
-    def __init__(self, users, subjects, subscriptions, sub_uc, list_uc, disable_uc):
+    def __init__(self, users, subjects, subscriptions, sub_uc, list_uc, disable_uc, public_site_url: str = ""):
         self.users = users
         self.subjects = subjects
         self.subscriptions = subscriptions
         self.sub_uc = sub_uc
         self.list_uc = list_uc
         self.disable_uc = disable_uc
+        self.address_picker_url = f"{public_site_url.rstrip('/')}/?view=select" if public_site_url else ""
         self.webhook_parser = MaxWebhookParser()
 
     def handle_payload(self, payload: dict):
@@ -578,12 +635,15 @@ class BotService:
     def _normalize(text: str) -> str:
         return " ".join(text.strip().lower().split())
 
-    @staticmethod
-    def _main_keyboard() -> list[list[dict]]:
-        return [
-            [{"type": "message", "text": "Мои адреса"}, {"type": "message", "text": "Подписаться"}],
-            [{"type": "message", "text": "Услуги"}, {"type": "message", "text": "Помощь"}],
-        ]
+    def _main_keyboard(self) -> list[list[dict]]:
+        rows: list[list[dict]] = []
+        if self.address_picker_url:
+            rows.append([{"type": "link", "text": "Выбрать адрес", "url": self.address_picker_url}])
+        else:
+            rows.append([{"type": "message", "text": "Подписаться"}])
+        rows.append([{"type": "message", "text": "Мои адреса"}, {"type": "message", "text": "Подписаться"}])
+        rows.append([{"type": "message", "text": "Услуги"}, {"type": "message", "text": "Помощь"}])
+        return rows
 
     def _welcome(self) -> dict:
         return {
@@ -593,6 +653,7 @@ class BotService:
                 "1. Откройте QR-код у нужного подъезда или публичную страницу адреса.\n"
                 "2. Нажмите «Подписаться в MAX».\n"
                 "3. Бот сам добавит адрес в ваши подписки.\n\n"
+                "Также можно нажать «Выбрать адрес» и найти адрес прямо из меню бота.\n\n"
                 "Квартиру указывать не нужно."
             ),
             "keyboard": self._main_keyboard(),
@@ -603,6 +664,7 @@ class BotService:
             "message": (
                 "Что можно сделать:\n"
                 "• «Мои адреса» — посмотреть активные подписки.\n"
+                "• «Выбрать адрес» — найти поддерживаемый адрес в списке.\n"
                 "• «Подписаться» — узнать, как добавить адрес через QR.\n"
                 "• «Отписаться 1» — отключить адрес по номеру из списка.\n"
                 "• «Отключить все» — выключить все уведомления.\n"
@@ -614,11 +676,12 @@ class BotService:
     def _subscribe_help(self) -> dict:
         return {
             "message": (
-                "Чтобы подписаться на адрес, отсканируйте QR-код у подъезда или откройте публичную страницу адреса "
-                "и нажмите «Подписаться в MAX».\n\n"
+                "Нажмите «Выбрать адрес» и найдите адрес в списке.\n\n"
+                "Еще можно отсканировать QR-код у подъезда или открыть публичную страницу адреса "
+                "и нажать «Подписаться в MAX».\n\n"
                 "Если у вас уже есть код из ссылки, отправьте: «Подписаться КОД»."
             ),
-            "keyboard": [[{"type": "message", "text": "Мои адреса"}, {"type": "message", "text": "Помощь"}]],
+            "keyboard": self._main_keyboard(),
         }
 
     def _subscription_code(self, text: str) -> str | None:
@@ -760,8 +823,15 @@ def build_container() -> AppContainer:
             SubscribeUserToSubjectUseCase(subjects, subscriptions),
             ListUserSubscriptionsUseCase(subscriptions),
             DisableAllUserNotificationsUseCase(subscriptions),
+            settings.public_site_url,
         ),
-        public_service=PublicService(subjects),
+        public_service=PublicService(
+            subjects,
+            users,
+            subscriptions,
+            SubscribeUserToSubjectUseCase(subjects, subscriptions),
+            secret,
+        ),
         admin_service=AdminService(admin_users, admin_permissions, subjects, users, subscriptions, secret, notifier, session, settings.public_site_url),
         polling_use_case=_Mock(),
         notification_service=notifier,

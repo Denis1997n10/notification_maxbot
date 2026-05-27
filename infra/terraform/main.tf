@@ -70,6 +70,15 @@ locals {
     },
   ]
 
+  public_api_secrets = var.function_use_mocks ? [] : [
+    {
+      id                   = var.max_bot_token_secret_id
+      version_id           = var.max_bot_token_secret_version_id
+      key                  = "MAX_BOT_TOKEN"
+      environment_variable = "MAX_BOT_TOKEN"
+    },
+  ]
+
   common_env = {
     ENV                        = var.environment
     REGIONCITY_BASE_URL        = var.regioncity_base_url
@@ -229,6 +238,16 @@ resource "yandex_function" "public_api" {
   execution_timeout  = tostring(var.function_timeout_seconds)
   service_account_id = yandex_iam_service_account.functions.id
   environment        = local.common_env
+
+  dynamic "secrets" {
+    for_each = local.public_api_secrets
+    content {
+      id                   = secrets.value.id
+      version_id           = secrets.value.version_id
+      key                  = secrets.value.key
+      environment_variable = secrets.value.environment_variable
+    }
+  }
 
   package {
     bucket_name = yandex_storage_object.public_api_zip.bucket

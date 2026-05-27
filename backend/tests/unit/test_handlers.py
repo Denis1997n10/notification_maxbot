@@ -11,9 +11,14 @@ class DummyBotService:
 
 class DummyPublicService:
     def get_entrance_page(self, code): return {"public_code": code}
+    def list_cities(self): return [{"id": "c1"}]
+    def list_city_districts(self, city_id): return [{"city_id": city_id}]
     def list_districts(self): return [{"id": "d1"}]
+    def list_streets(self, district_id): return [{"district_id": district_id}]
     def list_houses(self, district_id): return [{"district_id": district_id}]
+    def list_street_houses(self, street_id): return [{"street_id": street_id}]
     def list_entrances(self, house_id): return [{"house_id": house_id}]
+    def subscribe_from_mini_app(self, body): return {"status": "subscribed"}
     def create_subscription(self, body): return {"created": True}
 
 
@@ -91,6 +96,23 @@ def test_public_api_routes(monkeypatch):
     from functions.public_api.handler import handler
 
     resp = handler({"httpMethod": "GET", "path": "/api/v1/public/districts"}, None)
+    assert resp["statusCode"] == 200
+
+    resp = handler({"httpMethod": "GET", "path": "/api/v1/public/cities"}, None)
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])[0]["id"] == "c1"
+
+    resp = handler(
+        {
+            "httpMethod": "GET",
+            "path": "/api/v1/public/districts/d1/streets",
+            "pathParameters": {"districtId": "d1"},
+        },
+        None,
+    )
+    assert resp["statusCode"] == 200
+
+    resp = handler({"httpMethod": "POST", "path": "/api/v1/public/miniapp/subscriptions", "body": "{}"}, None)
     assert resp["statusCode"] == 200
 
 
