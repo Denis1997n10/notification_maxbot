@@ -5,30 +5,26 @@ info:
 x-yc-apigateway:
   cors:
     origin:
-      - "*"
+      - "$public_origin"
+      - "$admin_origin"
+      - "http://localhost:5173"
+      - "http://localhost:5174"
     methods: [GET, POST, PATCH, DELETE, OPTIONS]
     allowedHeaders: [Content-Type, Authorization]
 paths:
   /api/v1/system/health:
     get:
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${public_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
       responses: {'200': {description: ok}}
   /api/v1/system/version:
     get:
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${public_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
       responses: {'200': {description: ok}}
   /api/v1/bot/webhook:
     post:
       x-yc-apigateway-integration:
         type: cloud_functions
-        function_id: "${bot_webhook_function_id}"
-        service_account_id: "${gateway_service_account_id}"
+        function_id: "$bot_webhook_function_id"
       responses: {'200': {description: ok}}
   /api/v1/public/entrances/{publicCode}:
     get:
@@ -37,17 +33,11 @@ paths:
           in: path
           required: true
           schema: {type: string}
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${public_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
       responses: {'200': {description: ok}}
   /api/v1/public/districts:
     get:
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${public_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
       responses: {'200': {description: ok}}
   /api/v1/public/districts/{districtId}/houses:
     get:
@@ -56,10 +46,7 @@ paths:
           in: path
           required: true
           schema: {type: string}
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${public_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
       responses: {'200': {description: ok}}
   /api/v1/public/houses/{houseId}/entrances:
     get:
@@ -68,31 +55,11 @@ paths:
           in: path
           required: true
           schema: {type: string}
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${public_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$public_api_function_id"}
       responses: {'200': {description: ok}}
   /api/v1/admin/auth/login:
     post:
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${admin_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
-      responses: {'200': {description: ok}}
-  /api/v1/admin/me:
-    get:
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${admin_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
-      responses: {'200': {description: ok}}
-  /api/v1/admin/test-notification:
-    post:
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${admin_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$admin_api_function_id"}
       responses: {'200': {description: ok}}
   /api/v1/admin/{proxy+}:
     x-yc-apigateway-any-method:
@@ -101,8 +68,5 @@ paths:
           in: path
           required: true
           schema: {type: string}
-      x-yc-apigateway-integration:
-        type: cloud_functions
-        function_id: "${admin_api_function_id}"
-        service_account_id: "${gateway_service_account_id}"
+      x-yc-apigateway-integration: {type: cloud_functions, function_id: "$admin_api_function_id"}
       responses: {'200': {description: ok}}

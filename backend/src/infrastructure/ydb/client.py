@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import ydb
-
 
 @dataclass
 class YdbConfig:
@@ -13,11 +11,13 @@ class YdbConfig:
 
 
 class YdbSession:
-    def __init__(self, pool: ydb.QuerySessionPool) -> None:
+    def __init__(self, pool) -> None:
         self._pool = pool
 
     def execute(self, query: str, parameters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        def _query(session: ydb.QuerySession) -> list[dict[str, Any]]:
+        import ydb
+
+        def _query(session) -> list[dict[str, Any]]:
             tx = session.transaction(ydb.SerializableReadWrite()).begin()
             result = tx.execute(
                 query,
@@ -36,6 +36,8 @@ class YdbSession:
 class YdbClient:
     def __init__(self, config: YdbConfig) -> None:
         self.config = config
+        import ydb
+
         self._driver = ydb.Driver(
             endpoint=config.endpoint,
             database=config.database,

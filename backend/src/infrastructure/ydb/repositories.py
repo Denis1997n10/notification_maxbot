@@ -89,6 +89,33 @@ class YdbSubjectRepository(SubjectRepository):
     def __init__(self, session: YdbSession) -> None:
         self.session = session
 
+    def get_entrance_page_data(self, public_code: str) -> dict | None:
+        rows = self.session.execute(
+            """
+            SELECT e.public_code AS public_code,
+                   e.entrance_number AS entrance_number,
+                   e.is_active AS is_active,
+                   d.name AS district_name,
+                   h.city AS city,
+                   h.street AS street,
+                   h.house_number AS house_number,
+                   h.building AS building
+            FROM entrances AS e
+            INNER JOIN houses AS h ON h.id = e.house_id
+            INNER JOIN districts AS d ON d.id = h.district_id
+            WHERE e.public_code=$code AND e.is_active=true
+            LIMIT 1
+            """,
+            {"$code": public_code},
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        building = f" к{row['building']}" if row.get("building") else ""
+        row["house_name"] = f"{row['city']}, {row['street']} {row['house_number']}{building}"
+        row["address"] = f"{row['house_name']}, подъезд {row['entrance_number']}"
+        return row
+
     def _map_entrance(self, row: dict) -> Subject:
         title = f"Подъезд {row.get('entrance_number', '')}".strip()
         return Subject(subject_id=row["id"], subject_type=SubjectType.ENTRANCE, title=title, is_active=row.get("is_active", True), external_ref=row.get("regioncity_external_ref"))
