@@ -78,18 +78,21 @@ resource "yandex_ydb_database_serverless" "db" {
 }
 
 resource "yandex_storage_bucket" "public_site" {
-  bucket    = var.bucket_public_name
-  folder_id = var.folder_id
+  bucket        = var.bucket_public_name
+  folder_id     = var.folder_id
+  force_destroy = true
 }
 
 resource "yandex_storage_bucket" "admin_panel" {
-  bucket    = var.bucket_admin_name
-  folder_id = var.folder_id
+  bucket        = var.bucket_admin_name
+  folder_id     = var.folder_id
+  force_destroy = true
 }
 
 resource "yandex_storage_bucket" "release_artifacts" {
-  bucket    = var.release_artifacts_bucket_name
-  folder_id = var.folder_id
+  bucket        = var.release_artifacts_bucket_name
+  folder_id     = var.folder_id
+  force_destroy = true
 }
 
 resource "yandex_storage_object" "bot_webhook_zip" {
