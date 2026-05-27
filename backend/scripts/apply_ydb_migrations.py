@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
 from pathlib import Path
 
 from config.settings import load_settings
-from infrastructure.ydb.client import YdbClient, YdbConfig
 
 
 def _list_migrations() -> list[Path]:
@@ -16,12 +14,16 @@ def _list_migrations() -> list[Path]:
 def main() -> None:
     settings = load_settings()
     use_mocks = os.getenv("USE_MOCKS", "false").lower() == "true"
-    if use_mocks:
-        print("Skipping real YDB migrations because USE_MOCKS=true")
+
+    if use_mocks or settings.env == "dev":
+        print("Skipping real YDB migrations because USE_MOCKS=true or ENV=dev")
         return
 
     if not settings.ydb_endpoint or not settings.ydb_database:
         raise SystemExit("YDB_ENDPOINT/YDB_DATABASE are required for real migrations")
+
+    from infrastructure.ydb.client import YdbClient, YdbConfig
+    from datetime import UTC, datetime
 
     client = YdbClient(YdbConfig(endpoint=settings.ydb_endpoint, database=settings.ydb_database))
     session = client.session()
@@ -43,6 +45,7 @@ def main() -> None:
         if migration.name in applied_ids:
             print(f"skip {migration.name}")
             continue
+
         sql = migration.read_text(encoding="utf-8")
         print(f"apply {migration.name}")
         session.execute(sql)
