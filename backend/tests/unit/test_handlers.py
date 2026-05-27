@@ -20,6 +20,15 @@ class DummyPublicService:
 class DummyAdminService:
     def login(self, body): return {"token": "t"}
     def me(self, headers): return {"role": "super_admin"}
+    def list_districts(self, headers): return {"items": [{"id": "d1"}]}
+    def create_district(self, headers, body): return {"item": {"id": "d2"}}
+    def list_houses(self, headers, district_id): return {"items": [{"district_id": district_id}]}
+    def create_house(self, headers, district_id, body): return {"item": {"district_id": district_id}}
+    def list_entrances(self, headers, house_id): return {"items": [{"house_id": house_id}]}
+    def create_entrance(self, headers, house_id, body): return {"item": {"house_id": house_id}}
+    def deactivate_district(self, headers, district_id): return {"item": {"id": district_id, "is_active": False}}
+    def deactivate_house(self, headers, house_id): return {"item": {"id": house_id, "is_active": False}}
+    def deactivate_entrance(self, headers, entrance_id): return {"item": {"id": entrance_id, "is_active": False}}
     def send_test_notification(self, headers, body): return {"sent": 1}
 
 
@@ -79,6 +88,35 @@ def test_admin_api_routes(monkeypatch):
     resp = handler({"httpMethod": "POST", "path": "/api/v1/admin/test-notification", "headers": {}, "body": "{}"}, None)
     assert resp["statusCode"] == 200
     assert json.loads(resp["body"])["sent"] == 1
+
+    resp = handler({"httpMethod": "GET", "path": "/api/v1/admin/districts", "headers": {}}, None)
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["items"][0]["id"] == "d1"
+
+    resp = handler(
+        {
+            "httpMethod": "POST",
+            "path": "/api/v1/admin/districts/d1/houses",
+            "pathParameters": {"districtId": "d1"},
+            "headers": {},
+            "body": "{}",
+        },
+        None,
+    )
+    assert resp["statusCode"] == 201
+    assert json.loads(resp["body"])["item"]["district_id"] == "d1"
+
+    resp = handler(
+        {
+            "httpMethod": "PATCH",
+            "path": "/api/v1/admin/entrances/e1/deactivate",
+            "pathParameters": {"entranceId": "e1"},
+            "headers": {},
+        },
+        None,
+    )
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["item"]["is_active"] is False
 
 
 def test_bot_webhook_rejects_invalid_secret(monkeypatch):

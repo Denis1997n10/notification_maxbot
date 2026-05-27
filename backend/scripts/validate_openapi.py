@@ -22,6 +22,12 @@ required = [
 '/api/v1/public/houses/{houseId}/entrances',
 '/api/v1/admin/auth/login',
 '/api/v1/admin/me',
+'/api/v1/admin/districts',
+'/api/v1/admin/districts/{districtId}/houses',
+'/api/v1/admin/houses/{houseId}/entrances',
+'/api/v1/admin/districts/{districtId}/deactivate',
+'/api/v1/admin/houses/{houseId}/deactivate',
+'/api/v1/admin/entrances/{entranceId}/deactivate',
 '/api/v1/admin/test-notification',
 ]
 for p in required:

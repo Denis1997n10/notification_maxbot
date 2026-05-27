@@ -109,6 +109,114 @@ paths:
       responses:
         '200':
           description: ok
+  /api/v1/admin/districts:
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '201':
+          description: created
+  /api/v1/admin/districts/{districtId}/houses:
+    parameters:
+      - name: districtId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '201':
+          description: created
+  /api/v1/admin/houses/{houseId}/entrances:
+    parameters:
+      - name: houseId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '201':
+          description: created
+  /api/v1/admin/districts/{districtId}/deactivate:
+    parameters:
+      - name: districtId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/admin/houses/{houseId}/deactivate:
+    parameters:
+      - name: houseId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/admin/entrances/{entranceId}/deactivate:
+    parameters:
+      - name: entranceId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
   /api/v1/admin/test-notification:
     post:
       x-yc-apigateway-integration:

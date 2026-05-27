@@ -88,11 +88,23 @@ class PublicService:
 class AdminService:
     _PASSWORD_ITERATIONS = 600_000
 
-    def __init__(self, admin_repo: YdbAdminUserRepository, secret_provider: SecretProvider, notifier: NotificationService, session: Any):
+    def __init__(
+        self,
+        admin_repo: YdbAdminUserRepository,
+        permissions: YdbAdminPermissionRepository,
+        subjects: YdbSubjectRepository,
+        secret_provider: SecretProvider,
+        notifier: NotificationService,
+        session: Any,
+        public_site_url: str = "",
+    ):
         self.admin_repo = admin_repo
+        self.permissions = permissions
+        self.subjects = subjects
         self.secret_provider = secret_provider
         self.notifier = notifier
         self.session = session
+        self.public_site_url = public_site_url.rstrip("/")
 
     def hash_password(self, raw: str) -> str:
         salt = secrets.token_bytes(16)
@@ -139,13 +151,143 @@ class AdminService:
         return {"token": self._issue(u["id"], u["role"]), "role": u["role"]}
 
     def me(self, headers: dict):
-        auth = headers.get("Authorization", "")
+        auth = headers.get("Authorization") or headers.get("authorization", "")
         if not auth.startswith("Bearer "):
             return {"error": "unauthorized"}
         try:
             return self._verify(auth.replace("Bearer ", ""))
         except Exception:
             return {"error": "unauthorized"}
+
+    def _principal(self, headers: dict) -> dict | None:
+        principal = self.me(headers)
+        return None if "error" in principal else principal
+
+    def _can_manage_district(self, principal: dict, district_id: str) -> bool:
+        if principal.get("role") == "super_admin":
+            return True
+        return self.permissions.can_manage_subject(str(principal.get("sub", "")), district_id)
+
+    def _authorized_district(self, headers: dict, district_id: str) -> tuple[dict | None, dict | None]:
+        principal = self._principal(headers)
+        if not principal:
+            return None, {"error": "unauthorized"}
+        district = self.subjects.get_district(district_id)
+        if not district or not district.get("is_active", True):
+            return None, {"error": "not_found"}
+        if not self._can_manage_district(principal, district_id):
+            return None, {"error": "forbidden"}
+        return principal, None
+
+    @staticmethod
+    def _required(data: dict, names: tuple[str, ...]) -> list[str]:
+        return [name for name in names if not str(data.get(name) or "").strip()]
+
+    def list_districts(self, headers: dict) -> dict:
+        principal = self._principal(headers)
+        if not principal:
+            return {"error": "unauthorized"}
+        items = self.subjects.list_districts()
+        if principal.get("role") != "super_admin":
+            items = [item for item in items if self._can_manage_district(principal, item["id"])]
+        return {"items": items}
+
+    def create_district(self, headers: dict, body: str | dict | None) -> dict:
+        principal = self._principal(headers)
+        if not principal:
+            return {"error": "unauthorized"}
+        if principal.get("role") != "super_admin":
+            return {"error": "forbidden"}
+        data = _parse_json(body)
+        missing = self._required(data, ("name",))
+        if missing:
+            return {"error": "required_fields", "fields": missing}
+        return {"item": self.subjects.create_district(str(data["name"]).strip())}
+
+    def list_houses(self, headers: dict, district_id: str) -> dict:
+        _, error = self._authorized_district(headers, district_id)
+        if error:
+            return error
+        return {"items": self.subjects.list_houses_by_district(district_id)}
+
+    def create_house(self, headers: dict, district_id: str, body: str | dict | None) -> dict:
+        _, error = self._authorized_district(headers, district_id)
+        if error:
+            return error
+        data = _parse_json(body)
+        missing = self._required(data, ("city", "street", "house_number"))
+        if missing:
+            return {"error": "required_fields", "fields": missing}
+        return {
+            "item": self.subjects.create_house(
+                district_id,
+                str(data["city"]).strip(),
+                str(data["street"]).strip(),
+                str(data["house_number"]).strip(),
+                str(data.get("building") or "").strip(),
+            )
+        }
+
+    def _authorized_house(self, headers: dict, house_id: str) -> tuple[dict | None, dict | None]:
+        house = self.subjects.get_house(house_id)
+        if not house or not house.get("is_active", True):
+            return None, {"error": "not_found"}
+        _, error = self._authorized_district(headers, house["district_id"])
+        return (house, None) if not error else (None, error)
+
+    def list_entrances(self, headers: dict, house_id: str) -> dict:
+        _, error = self._authorized_house(headers, house_id)
+        if error:
+            return error
+        return {"items": [self._entrance_response(item) for item in self.subjects.list_entrances_by_house(house_id)]}
+
+    def create_entrance(self, headers: dict, house_id: str, body: str | dict | None) -> dict:
+        _, error = self._authorized_house(headers, house_id)
+        if error:
+            return error
+        data = _parse_json(body)
+        missing = self._required(data, ("entrance_number",))
+        if missing:
+            return {"error": "required_fields", "fields": missing}
+        public_code = str(data.get("public_code") or uuid4().hex[:12]).strip()
+        if len(public_code) > 80 or not all(character.isalnum() or character in "-_" for character in public_code):
+            return {"error": "invalid_public_code"}
+        row = self.subjects.create_entrance(
+            house_id,
+            str(data["entrance_number"]).strip(),
+            public_code,
+            str(data.get("regioncity_external_ref") or "").strip(),
+        )
+        if not row:
+            return {"error": "public_code_conflict"}
+        return {"item": self._entrance_response(row)}
+
+    def _entrance_response(self, item: dict) -> dict:
+        result = dict(item)
+        if self.public_site_url and item.get("public_code"):
+            result["public_url"] = f"{self.public_site_url}/e/{item['public_code']}"
+        return result
+
+    def deactivate_district(self, headers: dict, district_id: str) -> dict:
+        _, error = self._authorized_district(headers, district_id)
+        if error:
+            return error
+        return {"item": self.subjects.deactivate_district(district_id)}
+
+    def deactivate_house(self, headers: dict, house_id: str) -> dict:
+        house, error = self._authorized_house(headers, house_id)
+        if error:
+            return error
+        return {"item": self.subjects.deactivate_house(house["id"])}
+
+    def deactivate_entrance(self, headers: dict, entrance_id: str) -> dict:
+        entrance = self.subjects.get_entrance(entrance_id)
+        if not entrance or not entrance.get("is_active", True):
+            return {"error": "not_found"}
+        _, error = self._authorized_house(headers, entrance["house_id"])
+        if error:
+            return error
+        return {"item": self._entrance_response(self.subjects.deactivate_entrance(entrance_id))}
 
     def send_test_notification(self, headers: dict, body: str | dict | None) -> dict:
         if "error" in self.me(headers):
@@ -245,7 +387,7 @@ def build_container() -> AppContainer:
     subscriptions = YdbSubscriptionRepository(session)
     processed = YdbProcessedEventRepository(session)
     admin_users = YdbAdminUserRepository(session)
-    _ = YdbAdminPermissionRepository(session)
+    admin_permissions = YdbAdminPermissionRepository(session)
     _ = YdbFeatureFlagRepository(session)
 
     secret = YandexLockboxSecretProvider(settings.env)
@@ -262,7 +404,7 @@ def build_container() -> AppContainer:
             DisableAllUserNotificationsUseCase(subscriptions),
         ),
         public_service=PublicService(subjects),
-        admin_service=AdminService(admin_users, secret, notifier, session),
+        admin_service=AdminService(admin_users, admin_permissions, subjects, secret, notifier, session, settings.public_site_url),
         polling_use_case=_Mock(),
         notification_service=notifier,
         bot_reply_channel=max_channel,
@@ -270,7 +412,11 @@ def build_container() -> AppContainer:
 
 
 def api_response(status: int, body: dict) -> dict:
-    return {"statusCode": status, "headers": {"Content-Type": "application/json"}, "body": json.dumps(body, ensure_ascii=False)}
+    return {
+        "statusCode": status,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(body, ensure_ascii=False, default=lambda value: value.isoformat() if isinstance(value, datetime) else str(value)),
+    }
 
 
 def now_utc() -> datetime:

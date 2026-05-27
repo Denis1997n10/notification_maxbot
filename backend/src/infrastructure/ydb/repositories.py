@@ -102,7 +102,10 @@ class YdbSubjectRepository(SubjectRepository):
             FROM entrances AS e
             INNER JOIN houses AS h ON h.id = e.house_id
             INNER JOIN districts AS d ON d.id = h.district_id
-            WHERE e.public_code=$code AND e.is_active=true
+            WHERE e.public_code=$code
+              AND e.is_active=true
+              AND h.is_active=true
+              AND d.is_active=true
             LIMIT 1
             """,
             {"$code": public_code},
@@ -146,6 +149,153 @@ class YdbSubjectRepository(SubjectRepository):
     def list_entrances_by_house(self, house_id: str, active_only: bool = True) -> list[dict]:
         where = "AND is_active=true" if active_only else ""
         return self.session.execute(f"SELECT * FROM entrances VIEW idx_house_id WHERE house_id=$house_id {where}", {"$house_id": house_id})
+
+    def get_district(self, district_id: str) -> dict | None:
+        rows = self.session.execute("SELECT * FROM districts WHERE id=$id LIMIT 1", {"$id": district_id})
+        return rows[0] if rows else None
+
+    def get_house(self, house_id: str) -> dict | None:
+        rows = self.session.execute("SELECT * FROM houses WHERE id=$id LIMIT 1", {"$id": house_id})
+        return rows[0] if rows else None
+
+    def get_entrance(self, entrance_id: str) -> dict | None:
+        rows = self.session.execute("SELECT * FROM entrances WHERE id=$id LIMIT 1", {"$id": entrance_id})
+        return rows[0] if rows else None
+
+    def create_district(self, name: str) -> dict:
+        row = {"id": str(uuid4()), "name": name, "is_active": True, "created_at": _now(), "updated_at": _now()}
+        self.session.execute(
+            "UPSERT INTO districts (id,name,is_active,created_at,updated_at) VALUES ($id,$name,true,$created_at,$updated_at)",
+            {"$id": row["id"], "$name": row["name"], "$created_at": row["created_at"], "$updated_at": row["updated_at"]},
+        )
+        return row
+
+    def create_house(self, district_id: str, city: str, street: str, house_number: str, building: str) -> dict:
+        row = {
+            "id": str(uuid4()),
+            "district_id": district_id,
+            "city": city,
+            "street": street,
+            "house_number": house_number,
+            "building": building,
+            "is_active": True,
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        self.session.execute(
+            """
+            UPSERT INTO houses (id,district_id,city,street,house_number,building,is_active,created_at,updated_at)
+            VALUES ($id,$district_id,$city,$street,$house_number,$building,true,$created_at,$updated_at)
+            """,
+            {
+                "$id": row["id"],
+                "$district_id": row["district_id"],
+                "$city": row["city"],
+                "$street": row["street"],
+                "$house_number": row["house_number"],
+                "$building": row["building"],
+                "$created_at": row["created_at"],
+                "$updated_at": row["updated_at"],
+            },
+        )
+        return row
+
+    def create_entrance(self, house_id: str, entrance_number: str, public_code: str, external_ref: str) -> dict | None:
+        existing = self.session.execute(
+            "SELECT id FROM entrances VIEW idx_public_code WHERE public_code=$public_code LIMIT 1",
+            {"$public_code": public_code},
+        )
+        if existing:
+            return None
+        row = {
+            "id": str(uuid4()),
+            "house_id": house_id,
+            "entrance_number": entrance_number,
+            "public_code": public_code,
+            "regioncity_external_ref": external_ref,
+            "is_active": True,
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        self.session.execute(
+            """
+            UPSERT INTO entrances (id,house_id,entrance_number,public_code,regioncity_external_ref,is_active,created_at,updated_at)
+            VALUES ($id,$house_id,$entrance_number,$public_code,$regioncity_external_ref,true,$created_at,$updated_at)
+            """,
+            {
+                "$id": row["id"],
+                "$house_id": row["house_id"],
+                "$entrance_number": row["entrance_number"],
+                "$public_code": row["public_code"],
+                "$regioncity_external_ref": row["regioncity_external_ref"],
+                "$created_at": row["created_at"],
+                "$updated_at": row["updated_at"],
+            },
+        )
+        return row
+
+    def deactivate_district(self, district_id: str) -> dict | None:
+        row = self.get_district(district_id)
+        if not row:
+            return None
+        for house in self.list_houses_by_district(district_id, active_only=False):
+            self.deactivate_house(house["id"])
+        row["is_active"] = False
+        row["updated_at"] = _now()
+        self.session.execute(
+            "UPSERT INTO districts (id,name,is_active,created_at,updated_at) VALUES ($id,$name,false,$created_at,$updated_at)",
+            {"$id": row["id"], "$name": row["name"], "$created_at": row["created_at"], "$updated_at": row["updated_at"]},
+        )
+        return row
+
+    def deactivate_house(self, house_id: str) -> dict | None:
+        row = self.get_house(house_id)
+        if not row:
+            return None
+        for entrance in self.list_entrances_by_house(house_id, active_only=False):
+            self.deactivate_entrance(entrance["id"])
+        row["is_active"] = False
+        row["updated_at"] = _now()
+        self.session.execute(
+            """
+            UPSERT INTO houses (id,district_id,city,street,house_number,building,is_active,created_at,updated_at)
+            VALUES ($id,$district_id,$city,$street,$house_number,$building,false,$created_at,$updated_at)
+            """,
+            {
+                "$id": row["id"],
+                "$district_id": row["district_id"],
+                "$city": row["city"],
+                "$street": row["street"],
+                "$house_number": row["house_number"],
+                "$building": row["building"],
+                "$created_at": row["created_at"],
+                "$updated_at": row["updated_at"],
+            },
+        )
+        return row
+
+    def deactivate_entrance(self, entrance_id: str) -> dict | None:
+        row = self.get_entrance(entrance_id)
+        if not row:
+            return None
+        row["is_active"] = False
+        row["updated_at"] = _now()
+        self.session.execute(
+            """
+            UPSERT INTO entrances (id,house_id,entrance_number,public_code,regioncity_external_ref,is_active,created_at,updated_at)
+            VALUES ($id,$house_id,$entrance_number,$public_code,$regioncity_external_ref,false,$created_at,$updated_at)
+            """,
+            {
+                "$id": row["id"],
+                "$house_id": row["house_id"],
+                "$entrance_number": row["entrance_number"],
+                "$public_code": row["public_code"],
+                "$regioncity_external_ref": row.get("regioncity_external_ref", ""),
+                "$created_at": row["created_at"],
+                "$updated_at": row["updated_at"],
+            },
+        )
+        return row
 
 
 class YdbSubscriptionRepository(SubscriptionRepository):
