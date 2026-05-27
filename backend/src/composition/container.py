@@ -34,7 +34,16 @@ def build_container() -> AppContainer:
 
 def api_response(status: int, body: dict) -> dict:
     import json
-    return {"statusCode": status, "headers": {"Content-Type": "application/json"}, "body": json.dumps(body, ensure_ascii=False)}
+    return {
+        "statusCode": status,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+        },
+        "body": json.dumps(body, ensure_ascii=False),
+    }
 
 
 def now_utc() -> datetime:
