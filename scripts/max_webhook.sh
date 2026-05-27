@@ -37,7 +37,7 @@ API_BASE="https://platform-api.max.ru/subscriptions"
 
 case "$ACTION" in
   list)
-    curl -sS -X GET "$API_BASE" \
+    curl --fail-with-body -sS -X GET "$API_BASE" \
       -H "Authorization: ${MAX_BOT_TOKEN}"
     echo
     ;;
@@ -45,18 +45,24 @@ case "$ACTION" in
   set)
     [[ -n "$WEBHOOK_URL" ]] || { echo "webhook_url is required for set"; exit 1; }
     : "${MAX_WEBHOOK_SECRET:?MAX_WEBHOOK_SECRET env var is required for set}"
+    [[ "$MAX_WEBHOOK_SECRET" =~ ^[a-zA-Z0-9_-]{5,256}$ ]] || {
+      echo "MAX_WEBHOOK_SECRET must match ^[a-zA-Z0-9_-]{5,256}$ for the MAX API"
+      exit 1
+    }
     echo "Setting MAX webhook subscription to: $WEBHOOK_URL"
-    curl -sS -X POST "$API_BASE" \
+    payload="$(jq -cn --arg url "$WEBHOOK_URL" --arg secret "$MAX_WEBHOOK_SECRET" \
+      '{url:$url,update_types:["message_created","bot_started"],secret:$secret}')"
+    curl --fail-with-body -sS -X POST "$API_BASE" \
       -H "Authorization: ${MAX_BOT_TOKEN}" \
       -H "Content-Type: application/json" \
-      -d "{\"url\":\"${WEBHOOK_URL}\",\"secret\":\"${MAX_WEBHOOK_SECRET}\"}"
+      -d "$payload"
     echo
     ;;
 
   delete)
     [[ -n "$WEBHOOK_URL" ]] || { echo "webhook_url is required for delete"; exit 1; }
     echo "Deleting MAX webhook subscription: $WEBHOOK_URL"
-    curl -sS -G -X DELETE "$API_BASE" \
+    curl --fail-with-body -sS -G -X DELETE "$API_BASE" \
       -H "Authorization: ${MAX_BOT_TOKEN}" \
       --data-urlencode "url=${WEBHOOK_URL}"
     echo

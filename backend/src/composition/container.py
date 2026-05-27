@@ -93,6 +93,8 @@ class AdminService:
         admin_repo: YdbAdminUserRepository,
         permissions: YdbAdminPermissionRepository,
         subjects: YdbSubjectRepository,
+        users: YdbUserRepository,
+        subscriptions: YdbSubscriptionRepository,
         secret_provider: SecretProvider,
         notifier: NotificationService,
         session: Any,
@@ -101,6 +103,8 @@ class AdminService:
         self.admin_repo = admin_repo
         self.permissions = permissions
         self.subjects = subjects
+        self.users = users
+        self.subscriptions = subscriptions
         self.secret_provider = secret_provider
         self.notifier = notifier
         self.session = session
@@ -179,9 +183,50 @@ class AdminService:
             return None, {"error": "forbidden"}
         return principal, None
 
+    def _super_admin(self, headers: dict) -> tuple[dict | None, dict | None]:
+        principal = self._principal(headers)
+        if not principal:
+            return None, {"error": "unauthorized"}
+        if principal.get("role") != "super_admin":
+            return None, {"error": "forbidden"}
+        return principal, None
+
     @staticmethod
     def _required(data: dict, names: tuple[str, ...]) -> list[str]:
         return [name for name in names if not str(data.get(name) or "").strip()]
+
+    def list_cities(self, headers: dict) -> dict:
+        principal = self._principal(headers)
+        if not principal:
+            return {"error": "unauthorized"}
+        items = self.subjects.list_cities()
+        if principal.get("role") == "super_admin":
+            return {"items": items}
+        items = [
+            city
+            for city in items
+            if any(self._can_manage_district(principal, district["id"]) for district in self.subjects.list_districts_by_city(city["id"]))
+        ]
+        return {"items": items}
+
+    def create_city(self, headers: dict, body: str | dict | None) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        data = _parse_json(body)
+        missing = self._required(data, ("name",))
+        if missing:
+            return {"error": "required_fields", "fields": missing}
+        return {"item": self.subjects.create_city(str(data["name"]).strip())}
+
+    def deactivate_city(self, headers: dict, city_id: str) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        city = self.subjects.get_city(city_id)
+        if not city or not city.get("is_active", True):
+            return {"error": "not_found"}
+        return {"item": self.subjects.deactivate_city(city_id)}
 
     def list_districts(self, headers: dict) -> dict:
         principal = self._principal(headers)
@@ -192,17 +237,55 @@ class AdminService:
             items = [item for item in items if self._can_manage_district(principal, item["id"])]
         return {"items": items}
 
-    def create_district(self, headers: dict, body: str | dict | None) -> dict:
+    def list_city_districts(self, headers: dict, city_id: str) -> dict:
         principal = self._principal(headers)
         if not principal:
             return {"error": "unauthorized"}
+        city = self.subjects.get_city(city_id)
+        if not city or not city.get("is_active", True):
+            return {"error": "not_found"}
+        items = self.subjects.list_districts_by_city(city_id)
         if principal.get("role") != "super_admin":
-            return {"error": "forbidden"}
+            items = [item for item in items if self._can_manage_district(principal, item["id"])]
+        return {"items": items}
+
+    def list_unassigned_districts(self, headers: dict) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        return {"items": self.subjects.list_unassigned_districts()}
+
+    def create_city_district(self, headers: dict, city_id: str, body: str | dict | None) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        city = self.subjects.get_city(city_id)
+        if not city or not city.get("is_active", True):
+            return {"error": "not_found"}
         data = _parse_json(body)
         missing = self._required(data, ("name",))
         if missing:
             return {"error": "required_fields", "fields": missing}
-        return {"item": self.subjects.create_district(str(data["name"]).strip())}
+        return {"item": self.subjects.create_district(str(data["name"]).strip(), city_id)}
+
+    def assign_district_to_city(self, headers: dict, city_id: str, body: str | dict | None) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        data = _parse_json(body)
+        district_id = str(data.get("district_id") or "").strip()
+        city = self.subjects.get_city(city_id)
+        district = self.subjects.get_district(district_id)
+        if not city or not city.get("is_active", True) or not district or not district.get("is_active", True):
+            return {"error": "not_found"}
+        self.subjects.link_district_to_city(city_id, district_id)
+        return {"item": district}
+
+    def create_district(self, headers: dict, body: str | dict | None) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        return {"error": "city_required"}
 
     def list_houses(self, headers: dict, district_id: str) -> dict:
         _, error = self._authorized_district(headers, district_id)
@@ -225,6 +308,58 @@ class AdminService:
                 str(data["street"]).strip(),
                 str(data["house_number"]).strip(),
                 str(data.get("building") or "").strip(),
+            )
+        }
+
+    def list_streets(self, headers: dict, district_id: str) -> dict:
+        _, error = self._authorized_district(headers, district_id)
+        if error:
+            return error
+        return {"items": self.subjects.list_streets_by_district(district_id)}
+
+    def create_street(self, headers: dict, district_id: str, body: str | dict | None) -> dict:
+        _, error = self._authorized_district(headers, district_id)
+        if error:
+            return error
+        data = _parse_json(body)
+        missing = self._required(data, ("name",))
+        if missing:
+            return {"error": "required_fields", "fields": missing}
+        return {"item": self.subjects.create_street(district_id, str(data["name"]).strip())}
+
+    def _authorized_street(self, headers: dict, street_id: str) -> tuple[dict | None, dict | None]:
+        street = self.subjects.get_street(street_id)
+        if not street or not street.get("is_active", True):
+            return None, {"error": "not_found"}
+        _, error = self._authorized_district(headers, street["district_id"])
+        return (street, None) if not error else (None, error)
+
+    def list_street_houses(self, headers: dict, street_id: str) -> dict:
+        _, error = self._authorized_street(headers, street_id)
+        if error:
+            return error
+        return {"items": self.subjects.list_houses_by_street(street_id)}
+
+    def create_street_house(self, headers: dict, street_id: str, body: str | dict | None) -> dict:
+        street, error = self._authorized_street(headers, street_id)
+        if error:
+            return error
+        data = _parse_json(body)
+        missing = self._required(data, ("house_number",))
+        if missing:
+            return {"error": "required_fields", "fields": missing}
+        district = self.subjects.get_district(street["district_id"])
+        city = self.subjects.get_city_for_district(street["district_id"])
+        if not city or not city.get("is_active", True):
+            return {"error": "city_required"}
+        return {
+            "item": self.subjects.create_house(
+                district["id"],
+                city["name"],
+                street["name"],
+                str(data["house_number"]).strip(),
+                str(data.get("building") or "").strip(),
+                street["id"],
             )
         }
 
@@ -269,10 +404,19 @@ class AdminService:
         return result
 
     def deactivate_district(self, headers: dict, district_id: str) -> dict:
-        _, error = self._authorized_district(headers, district_id)
+        _, error = self._super_admin(headers)
         if error:
             return error
+        district = self.subjects.get_district(district_id)
+        if not district or not district.get("is_active", True):
+            return {"error": "not_found"}
         return {"item": self.subjects.deactivate_district(district_id)}
+
+    def deactivate_street(self, headers: dict, street_id: str) -> dict:
+        street, error = self._authorized_street(headers, street_id)
+        if error:
+            return error
+        return {"item": self.subjects.deactivate_street(street["id"])}
 
     def deactivate_house(self, headers: dict, house_id: str) -> dict:
         house, error = self._authorized_house(headers, house_id)
@@ -288,6 +432,68 @@ class AdminService:
         if error:
             return error
         return {"item": self._entrance_response(self.subjects.deactivate_entrance(entrance_id))}
+
+    def list_resident_users(self, headers: dict) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        return {"items": self.users.list_active_for_admin()}
+
+    def deactivate_resident_user(self, headers: dict, user_id: str) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        item = self.users.deactivate_for_admin(user_id)
+        if not item:
+            return {"error": "not_found"}
+        self.subscriptions.deactivate_all(user_id)
+        return {"item": item}
+
+    def list_admin_users(self, headers: dict) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        items = []
+        for item in self.admin_repo.list_active_for_admin():
+            result = dict(item)
+            result["district_ids"] = self.permissions.list_district_ids(item["id"])
+            items.append(result)
+        return {"items": items}
+
+    def create_admin_user(self, headers: dict, body: str | dict | None) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        data = _parse_json(body)
+        login = str(data.get("login") or "").strip()
+        password = str(data.get("password") or "")
+        role = str(data.get("role") or "").strip()
+        district_ids = [str(item).strip() for item in (data.get("district_ids") or []) if str(item).strip()]
+        if not login or len(password) < 12 or role not in {"super_admin", "district_admin"}:
+            return {"error": "invalid_admin_user"}
+        if role == "district_admin" and not district_ids:
+            return {"error": "district_required"}
+        if self.admin_repo.find_any_by_login(login):
+            return {"error": "login_conflict"}
+        for district_id in district_ids:
+            if not self.subjects.get_district(district_id):
+                return {"error": "not_found"}
+        item = self.admin_repo.create_for_admin(login, self.hash_password(password), role)
+        if role == "district_admin":
+            self.permissions.grant_districts(item["id"], district_ids)
+            item["district_ids"] = district_ids
+        else:
+            item["district_ids"] = []
+        return {"item": item}
+
+    def deactivate_admin_user(self, headers: dict, admin_id: str) -> dict:
+        principal, error = self._super_admin(headers)
+        if error:
+            return error
+        if principal.get("sub") == admin_id:
+            return {"error": "cannot_deactivate_self"}
+        item = self.admin_repo.deactivate_for_admin(admin_id)
+        return {"item": item} if item else {"error": "not_found"}
 
     def send_test_notification(self, headers: dict, body: str | dict | None) -> dict:
         if "error" in self.me(headers):
@@ -404,7 +610,7 @@ def build_container() -> AppContainer:
             DisableAllUserNotificationsUseCase(subscriptions),
         ),
         public_service=PublicService(subjects),
-        admin_service=AdminService(admin_users, admin_permissions, subjects, secret, notifier, session, settings.public_site_url),
+        admin_service=AdminService(admin_users, admin_permissions, subjects, users, subscriptions, secret, notifier, session, settings.public_site_url),
         polling_use_case=_Mock(),
         notification_service=notifier,
         bot_reply_channel=max_channel,

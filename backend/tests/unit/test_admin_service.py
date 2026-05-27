@@ -13,10 +13,20 @@ class FakePermissions:
 
 class FakeSubjects:
     def __init__(self):
+        self.cities = [
+            {"id": "city-assigned", "name": "Assigned city", "is_active": True},
+            {"id": "city-hidden", "name": "Hidden city", "is_active": True},
+        ]
         self.districts = [
             {"id": "assigned", "name": "Assigned", "is_active": True},
             {"id": "hidden", "name": "Hidden", "is_active": True},
         ]
+
+    def list_cities(self):
+        return self.cities
+
+    def list_districts_by_city(self, city_id):
+        return [self.districts[0]] if city_id == "city-assigned" else [self.districts[1]]
 
     def list_districts(self):
         return self.districts
@@ -37,11 +47,21 @@ class FakeNotifier:
     pass
 
 
+class FakeUsers:
+    pass
+
+
+class FakeSubscriptions:
+    pass
+
+
 def _service():
     return AdminService(
         FakeAdminRepository(),
         FakePermissions(),
         FakeSubjects(),
+        FakeUsers(),
+        FakeSubscriptions(),
         FakeSecretProvider(),
         FakeNotifier(),
         None,
@@ -60,6 +80,7 @@ def test_district_admin_only_lists_and_reads_assigned_districts():
     assert [item["id"] for item in result["items"]] == ["assigned"]
     assert service.list_houses(headers, "assigned")["items"][0]["id"] == "house"
     assert service.list_houses(headers, "hidden") == {"error": "forbidden"}
+    assert [item["id"] for item in service.list_cities(headers)["items"]] == ["city-assigned"]
 
 
 def test_district_admin_cannot_create_top_level_district():
@@ -67,3 +88,4 @@ def test_district_admin_cannot_create_top_level_district():
     headers = _headers(service, "limited", "district_admin")
 
     assert service.create_district(headers, {"name": "New"}) == {"error": "forbidden"}
+    assert service.create_city(headers, {"name": "New"}) == {"error": "forbidden"}

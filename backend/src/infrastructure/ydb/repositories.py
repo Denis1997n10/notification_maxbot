@@ -83,6 +83,35 @@ class YdbUserRepository(UserRepository):
         )
         return user
 
+    def list_active_for_admin(self) -> list[dict]:
+        return self.session.execute(
+            "SELECT id, channel, external_user_id, display_name, is_active, created_at, updated_at "
+            "FROM users WHERE is_active=true"
+        )
+
+    def deactivate_for_admin(self, user_id: str) -> dict | None:
+        rows = self.session.execute("SELECT * FROM users WHERE id=$id LIMIT 1", {"$id": user_id})
+        if not rows:
+            return None
+        row = rows[0]
+        row["is_active"] = False
+        row["updated_at"] = _now()
+        self.session.execute(
+            """
+            UPSERT INTO users (id,channel,external_user_id,display_name,is_active,created_at,updated_at)
+            VALUES ($id,$channel,$external_user_id,$display_name,false,$created_at,$updated_at)
+            """,
+            {
+                "$id": row["id"],
+                "$channel": row["channel"],
+                "$external_user_id": row["external_user_id"],
+                "$display_name": row.get("display_name", ""),
+                "$created_at": row["created_at"],
+                "$updated_at": row["updated_at"],
+            },
+        )
+        return row
+
 
 class YdbSubjectRepository(SubjectRepository):
     def __init__(self, session: YdbSession) -> None:
@@ -142,6 +171,51 @@ class YdbSubjectRepository(SubjectRepository):
         where = "WHERE is_active=true" if active_only else ""
         return self.session.execute(f"SELECT * FROM districts {where}")
 
+    def list_cities(self, active_only: bool = True) -> list[dict]:
+        where = "WHERE is_active=true" if active_only else ""
+        return self.session.execute(f"SELECT * FROM cities {where}")
+
+    def get_city(self, city_id: str) -> dict | None:
+        rows = self.session.execute("SELECT * FROM cities WHERE id=$id LIMIT 1", {"$id": city_id})
+        return rows[0] if rows else None
+
+    def create_city(self, name: str) -> dict:
+        row = {"id": str(uuid4()), "name": name, "is_active": True, "created_at": _now(), "updated_at": _now()}
+        self.session.execute(
+            "UPSERT INTO cities (id,name,is_active,created_at,updated_at) VALUES ($id,$name,true,$created_at,$updated_at)",
+            {"$id": row["id"], "$name": row["name"], "$created_at": row["created_at"], "$updated_at": row["updated_at"]},
+        )
+        return row
+
+    def link_district_to_city(self, city_id: str, district_id: str) -> None:
+        self.session.execute(
+            "UPSERT INTO district_city_links (district_id,city_id,updated_at) VALUES ($district_id,$city_id,$updated_at)",
+            {"$district_id": district_id, "$city_id": city_id, "$updated_at": _now()},
+        )
+
+    def list_districts_by_city(self, city_id: str, active_only: bool = True) -> list[dict]:
+        links = self.session.execute(
+            "SELECT district_id FROM district_city_links VIEW idx_city_id WHERE city_id=$city_id",
+            {"$city_id": city_id},
+        )
+        items: list[dict] = []
+        for link in links:
+            item = self.get_district(link["district_id"])
+            if item and (not active_only or item.get("is_active", True)):
+                items.append(item)
+        return items
+
+    def list_unassigned_districts(self) -> list[dict]:
+        linked_ids = {row["district_id"] for row in self.session.execute("SELECT district_id FROM district_city_links")}
+        return [item for item in self.list_districts() if item["id"] not in linked_ids]
+
+    def get_city_for_district(self, district_id: str) -> dict | None:
+        links = self.session.execute(
+            "SELECT city_id FROM district_city_links WHERE district_id=$district_id LIMIT 1",
+            {"$district_id": district_id},
+        )
+        return self.get_city(links[0]["city_id"]) if links else None
+
     def list_houses_by_district(self, district_id: str, active_only: bool = True) -> list[dict]:
         where = "AND is_active=true" if active_only else ""
         return self.session.execute(f"SELECT * FROM houses VIEW idx_district_id WHERE district_id=$district_id {where}", {"$district_id": district_id})
@@ -162,15 +236,68 @@ class YdbSubjectRepository(SubjectRepository):
         rows = self.session.execute("SELECT * FROM entrances WHERE id=$id LIMIT 1", {"$id": entrance_id})
         return rows[0] if rows else None
 
-    def create_district(self, name: str) -> dict:
+    def create_district(self, name: str, city_id: str | None = None) -> dict:
         row = {"id": str(uuid4()), "name": name, "is_active": True, "created_at": _now(), "updated_at": _now()}
         self.session.execute(
             "UPSERT INTO districts (id,name,is_active,created_at,updated_at) VALUES ($id,$name,true,$created_at,$updated_at)",
             {"$id": row["id"], "$name": row["name"], "$created_at": row["created_at"], "$updated_at": row["updated_at"]},
         )
+        if city_id:
+            self.link_district_to_city(city_id, row["id"])
         return row
 
-    def create_house(self, district_id: str, city: str, street: str, house_number: str, building: str) -> dict:
+    def list_streets_by_district(self, district_id: str, active_only: bool = True) -> list[dict]:
+        where = "AND is_active=true" if active_only else ""
+        return self.session.execute(
+            f"SELECT * FROM streets VIEW idx_district_id WHERE district_id=$district_id {where}",
+            {"$district_id": district_id},
+        )
+
+    def get_street(self, street_id: str) -> dict | None:
+        rows = self.session.execute("SELECT * FROM streets WHERE id=$id LIMIT 1", {"$id": street_id})
+        return rows[0] if rows else None
+
+    def create_street(self, district_id: str, name: str) -> dict:
+        row = {
+            "id": str(uuid4()),
+            "district_id": district_id,
+            "name": name,
+            "is_active": True,
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        self.session.execute(
+            "UPSERT INTO streets (id,district_id,name,is_active,created_at,updated_at) "
+            "VALUES ($id,$district_id,$name,true,$created_at,$updated_at)",
+            {
+                "$id": row["id"],
+                "$district_id": row["district_id"],
+                "$name": row["name"],
+                "$created_at": row["created_at"],
+                "$updated_at": row["updated_at"],
+            },
+        )
+        return row
+
+    def link_house_to_street(self, street_id: str, house_id: str) -> None:
+        self.session.execute(
+            "UPSERT INTO house_street_links (house_id,street_id,updated_at) VALUES ($house_id,$street_id,$updated_at)",
+            {"$house_id": house_id, "$street_id": street_id, "$updated_at": _now()},
+        )
+
+    def list_houses_by_street(self, street_id: str, active_only: bool = True) -> list[dict]:
+        links = self.session.execute(
+            "SELECT house_id FROM house_street_links VIEW idx_street_id WHERE street_id=$street_id",
+            {"$street_id": street_id},
+        )
+        items: list[dict] = []
+        for link in links:
+            item = self.get_house(link["house_id"])
+            if item and (not active_only or item.get("is_active", True)):
+                items.append(item)
+        return items
+
+    def create_house(self, district_id: str, city: str, street: str, house_number: str, building: str, street_id: str | None = None) -> dict:
         row = {
             "id": str(uuid4()),
             "district_id": district_id,
@@ -198,6 +325,8 @@ class YdbSubjectRepository(SubjectRepository):
                 "$updated_at": row["updated_at"],
             },
         )
+        if street_id:
+            self.link_house_to_street(street_id, row["id"])
         return row
 
     def create_entrance(self, house_id: str, entrance_number: str, public_code: str, external_ref: str) -> dict | None:
@@ -245,6 +374,41 @@ class YdbSubjectRepository(SubjectRepository):
         self.session.execute(
             "UPSERT INTO districts (id,name,is_active,created_at,updated_at) VALUES ($id,$name,false,$created_at,$updated_at)",
             {"$id": row["id"], "$name": row["name"], "$created_at": row["created_at"], "$updated_at": row["updated_at"]},
+        )
+        return row
+
+    def deactivate_city(self, city_id: str) -> dict | None:
+        row = self.get_city(city_id)
+        if not row:
+            return None
+        for district in self.list_districts_by_city(city_id, active_only=False):
+            self.deactivate_district(district["id"])
+        row["is_active"] = False
+        row["updated_at"] = _now()
+        self.session.execute(
+            "UPSERT INTO cities (id,name,is_active,created_at,updated_at) VALUES ($id,$name,false,$created_at,$updated_at)",
+            {"$id": row["id"], "$name": row["name"], "$created_at": row["created_at"], "$updated_at": row["updated_at"]},
+        )
+        return row
+
+    def deactivate_street(self, street_id: str) -> dict | None:
+        row = self.get_street(street_id)
+        if not row:
+            return None
+        for house in self.list_houses_by_street(street_id, active_only=False):
+            self.deactivate_house(house["id"])
+        row["is_active"] = False
+        row["updated_at"] = _now()
+        self.session.execute(
+            "UPSERT INTO streets (id,district_id,name,is_active,created_at,updated_at) "
+            "VALUES ($id,$district_id,$name,false,$created_at,$updated_at)",
+            {
+                "$id": row["id"],
+                "$district_id": row["district_id"],
+                "$name": row["name"],
+                "$created_at": row["created_at"],
+                "$updated_at": row["updated_at"],
+            },
         )
         return row
 
@@ -394,6 +558,61 @@ class YdbAdminUserRepository(AdminUserRepository):
         rows = self.session.execute("SELECT * FROM admin_users VIEW idx_login WHERE login=$login AND is_active=true LIMIT 1", {"$login": login})
         return rows[0] if rows else None
 
+    def find_any_by_login(self, login: str) -> dict | None:
+        rows = self.session.execute("SELECT * FROM admin_users VIEW idx_login WHERE login=$login LIMIT 1", {"$login": login})
+        return rows[0] if rows else None
+
+    def list_active_for_admin(self) -> list[dict]:
+        return self.session.execute("SELECT id, login, role, is_active, created_at, updated_at FROM admin_users WHERE is_active=true")
+
+    def create_for_admin(self, login: str, password_hash: str, role: str) -> dict:
+        row = {
+            "id": str(uuid4()),
+            "login": login,
+            "role": role,
+            "is_active": True,
+            "created_at": _now(),
+            "updated_at": _now(),
+        }
+        self.session.execute(
+            """
+            UPSERT INTO admin_users (id,login,password_hash,role,is_active,created_at,updated_at)
+            VALUES ($id,$login,$password_hash,$role,true,$created_at,$updated_at)
+            """,
+            {
+                "$id": row["id"],
+                "$login": row["login"],
+                "$password_hash": password_hash,
+                "$role": row["role"],
+                "$created_at": row["created_at"],
+                "$updated_at": row["updated_at"],
+            },
+        )
+        return row
+
+    def deactivate_for_admin(self, admin_id: str) -> dict | None:
+        rows = self.session.execute("SELECT * FROM admin_users WHERE id=$id LIMIT 1", {"$id": admin_id})
+        if not rows:
+            return None
+        row = rows[0]
+        row["is_active"] = False
+        row["updated_at"] = _now()
+        self.session.execute(
+            """
+            UPSERT INTO admin_users (id,login,password_hash,role,is_active,created_at,updated_at)
+            VALUES ($id,$login,$password_hash,$role,false,$created_at,$updated_at)
+            """,
+            {
+                "$id": row["id"],
+                "$login": row["login"],
+                "$password_hash": row["password_hash"],
+                "$role": row["role"],
+                "$created_at": row["created_at"],
+                "$updated_at": row["updated_at"],
+            },
+        )
+        return {key: value for key, value in row.items() if key != "password_hash"}
+
 
 class YdbAdminPermissionRepository(AdminPermissionRepository):
     def __init__(self, session: YdbSession) -> None:
@@ -402,6 +621,20 @@ class YdbAdminPermissionRepository(AdminPermissionRepository):
     def can_manage_subject(self, admin_id: str, district_id: str) -> bool:
         rows = self.session.execute("SELECT district_id FROM admin_district_permissions WHERE admin_user_id=$admin_user_id AND district_id=$district_id LIMIT 1", {"$admin_user_id": admin_id, "$district_id": district_id})
         return bool(rows)
+
+    def list_district_ids(self, admin_id: str) -> list[str]:
+        rows = self.session.execute(
+            "SELECT district_id FROM admin_district_permissions WHERE admin_user_id=$admin_user_id",
+            {"$admin_user_id": admin_id},
+        )
+        return [row["district_id"] for row in rows]
+
+    def grant_districts(self, admin_id: str, district_ids: list[str]) -> None:
+        for district_id in district_ids:
+            self.session.execute(
+                "UPSERT INTO admin_district_permissions (admin_user_id,district_id) VALUES ($admin_user_id,$district_id)",
+                {"$admin_user_id": admin_id, "$district_id": district_id},
+            )
 
 
 class YdbPublicPageCacheRepository(PublicPageCacheRepository):

@@ -20,15 +20,32 @@ class DummyPublicService:
 class DummyAdminService:
     def login(self, body): return {"token": "t"}
     def me(self, headers): return {"role": "super_admin"}
+    def list_cities(self, headers): return {"items": [{"id": "c1"}]}
+    def create_city(self, headers, body): return {"item": {"id": "c2"}}
+    def list_city_districts(self, headers, city_id): return {"items": [{"city_id": city_id}]}
+    def create_city_district(self, headers, city_id, body): return {"item": {"city_id": city_id}}
+    def assign_district_to_city(self, headers, city_id, body): return {"item": {"city_id": city_id}}
+    def deactivate_city(self, headers, city_id): return {"item": {"id": city_id, "is_active": False}}
+    def list_unassigned_districts(self, headers): return {"items": []}
     def list_districts(self, headers): return {"items": [{"id": "d1"}]}
     def create_district(self, headers, body): return {"item": {"id": "d2"}}
     def list_houses(self, headers, district_id): return {"items": [{"district_id": district_id}]}
     def create_house(self, headers, district_id, body): return {"item": {"district_id": district_id}}
+    def list_streets(self, headers, district_id): return {"items": [{"district_id": district_id}]}
+    def create_street(self, headers, district_id, body): return {"item": {"district_id": district_id}}
+    def list_street_houses(self, headers, street_id): return {"items": [{"street_id": street_id}]}
+    def create_street_house(self, headers, street_id, body): return {"item": {"street_id": street_id}}
     def list_entrances(self, headers, house_id): return {"items": [{"house_id": house_id}]}
     def create_entrance(self, headers, house_id, body): return {"item": {"house_id": house_id}}
     def deactivate_district(self, headers, district_id): return {"item": {"id": district_id, "is_active": False}}
+    def deactivate_street(self, headers, street_id): return {"item": {"id": street_id, "is_active": False}}
     def deactivate_house(self, headers, house_id): return {"item": {"id": house_id, "is_active": False}}
     def deactivate_entrance(self, headers, entrance_id): return {"item": {"id": entrance_id, "is_active": False}}
+    def list_resident_users(self, headers): return {"items": [{"id": "u1"}]}
+    def deactivate_resident_user(self, headers, user_id): return {"item": {"id": user_id, "is_active": False}}
+    def list_admin_users(self, headers): return {"items": [{"id": "a1"}]}
+    def create_admin_user(self, headers, body): return {"item": {"id": "a2"}}
+    def deactivate_admin_user(self, headers, admin_id): return {"item": {"id": admin_id, "is_active": False}}
     def send_test_notification(self, headers, body): return {"sent": 1}
 
 
@@ -93,6 +110,10 @@ def test_admin_api_routes(monkeypatch):
     assert resp["statusCode"] == 200
     assert json.loads(resp["body"])["items"][0]["id"] == "d1"
 
+    resp = handler({"httpMethod": "GET", "path": "/api/v1/admin/cities", "headers": {}}, None)
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["items"][0]["id"] == "c1"
+
     resp = handler(
         {
             "httpMethod": "POST",
@@ -105,6 +126,22 @@ def test_admin_api_routes(monkeypatch):
     )
     assert resp["statusCode"] == 201
     assert json.loads(resp["body"])["item"]["district_id"] == "d1"
+
+    resp = handler(
+        {
+            "httpMethod": "GET",
+            "path": "/api/v1/admin/districts/d1/streets",
+            "pathParameters": {"districtId": "d1"},
+            "headers": {},
+        },
+        None,
+    )
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["items"][0]["district_id"] == "d1"
+
+    resp = handler({"httpMethod": "GET", "path": "/api/v1/admin/admin-users", "headers": {}}, None)
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["items"][0]["id"] == "a1"
 
     resp = handler(
         {

@@ -16,7 +16,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -117,7 +118,8 @@ label {
   gap: 8px;
 }
 
-input {
+input,
+select {
   background: #f7f9f8;
   border: 1px solid #dbe4df;
   border-radius: 11px;
@@ -128,6 +130,11 @@ input {
 }
 
 input:focus {
+  border-color: #188060;
+  box-shadow: 0 0 0 3px rgba(20, 124, 92, 0.12);
+}
+
+select:focus {
   border-color: #188060;
   box-shadow: 0 0 0 3px rgba(20, 124, 92, 0.12);
 }
@@ -144,6 +151,19 @@ input:focus {
 
 .primary:hover:not(:disabled) {
   background: #0e573f;
+}
+
+.secondary {
+  background: #fff;
+  border: 1px solid #cfe0d8;
+  border-radius: 11px;
+  color: #12674e;
+  font-weight: 650;
+  padding: 12px 17px;
+}
+
+.secondary:hover:not(:disabled) {
+  background: #eef7f3;
 }
 
 .alert {
@@ -284,7 +304,7 @@ input:focus {
 .directory-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .panel {
@@ -399,6 +419,10 @@ input:focus {
   font-weight: 650;
 }
 
+.compact-form {
+  margin-top: 14px;
+}
+
 .split {
   display: grid;
   gap: 8px;
@@ -424,6 +448,82 @@ input:focus {
   display: block;
   font-size: 0.79rem;
   margin-top: 6px;
+}
+
+.object-panel .select-list.houses {
+  max-height: 154px;
+}
+
+.entrance-subsection {
+  border-top: 1px solid #edf1ef;
+  margin-top: 18px;
+  padding-top: 17px;
+}
+
+.entrance-subsection h3 {
+  color: #4f6067;
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+}
+
+.inline-form {
+  margin-top: 13px;
+}
+
+.management-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.management-panel {
+  min-height: 230px;
+}
+
+.management-list {
+  max-height: 210px;
+}
+
+.list-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 7px 8px;
+}
+
+.list-copy small {
+  color: #687980;
+  font-size: 0.78rem;
+  margin-top: 3px;
+}
+
+.permission-list {
+  background: #f7f9f8;
+  border: 1px solid #e4eae7;
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  max-height: 112px;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+
+.checkbox {
+  align-items: center;
+  flex-direction: row;
+  font-size: 0.84rem;
+  font-weight: 500;
+  gap: 6px;
+}
+
+.checkbox input {
+  accent-color: #12674e;
+  height: 15px;
+  padding: 0;
+  width: 15px;
 }
 
 .notification-panel {
@@ -458,6 +558,10 @@ input:focus {
   .notification-panel {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .management-grid {
+    grid-template-columns: 1fr;
   }
 }
 

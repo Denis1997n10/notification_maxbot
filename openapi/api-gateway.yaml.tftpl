@@ -109,6 +109,85 @@ paths:
       responses:
         '200':
           description: ok
+  /api/v1/admin/cities:
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '201':
+          description: created
+  /api/v1/admin/cities/{cityId}/districts:
+    parameters:
+      - name: cityId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '201':
+          description: created
+  /api/v1/admin/cities/{cityId}/districts/assign:
+    parameters:
+      - name: cityId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/admin/cities/{cityId}/deactivate:
+    parameters:
+      - name: cityId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/admin/districts/unassigned:
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
   /api/v1/admin/districts:
     get:
       x-yc-apigateway-integration:
@@ -129,6 +208,52 @@ paths:
   /api/v1/admin/districts/{districtId}/houses:
     parameters:
       - name: districtId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '201':
+          description: created
+  /api/v1/admin/districts/{districtId}/streets:
+    parameters:
+      - name: districtId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '201':
+          description: created
+  /api/v1/admin/streets/{streetId}/houses:
+    parameters:
+      - name: streetId
         in: path
         required: true
         schema:
@@ -202,9 +327,80 @@ paths:
       responses:
         '200':
           description: ok
+  /api/v1/admin/streets/{streetId}/deactivate:
+    parameters:
+      - name: streetId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
   /api/v1/admin/entrances/{entranceId}/deactivate:
     parameters:
       - name: entranceId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/admin/users:
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/admin/users/{userId}/deactivate:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/admin/admin-users:
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '201':
+          description: created
+  /api/v1/admin/admin-users/{adminId}/deactivate:
+    parameters:
+      - name: adminId
         in: path
         required: true
         schema:
