@@ -20,10 +20,19 @@ def _path_param(params: dict[str, Any], path: str, key: str, marker: str) -> str
     return parts[index + 1] if len(parts) > index + 1 else ""
 
 
+def _event_params(event: dict[str, Any]) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    for key in ("parameters", "params", "pathParameters", "pathParams"):
+        value = event.get(key)
+        if isinstance(value, dict):
+            params.update(value)
+    return params
+
+
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     path = event.get("path", "")
     method = event.get("httpMethod", "GET")
-    params = event.get("pathParameters") or {}
+    params = _event_params(event)
 
     logger.info("public_api_request", extra={"path": path, "method": method})
 

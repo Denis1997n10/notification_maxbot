@@ -112,6 +112,17 @@ def test_public_api_routes(monkeypatch):
     assert resp["statusCode"] == 200
     assert json.loads(resp["body"])[0]["district_id"] == "d1"
 
+    resp = handler(
+        {
+            "httpMethod": "GET",
+            "path": "/api/v1/public/cities/{cityId}/districts",
+            "params": {"cityId": "c1"},
+        },
+        None,
+    )
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])[0]["city_id"] == "c1"
+
     resp = handler({"httpMethod": "POST", "path": "/api/v1/public/miniapp/subscriptions", "body": "{}"}, None)
     assert resp["statusCode"] == 200
 
@@ -146,6 +157,18 @@ def test_admin_api_routes(monkeypatch):
 
     resp = handler(
         {
+            "httpMethod": "GET",
+            "path": "/api/v1/admin/cities/{cityId}/districts",
+            "headers": {},
+            "params": {"cityId": "c1"},
+        },
+        None,
+    )
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["items"][0]["city_id"] == "c1"
+
+    resp = handler(
+        {
             "httpMethod": "POST",
             "path": "/api/v1/admin/districts/d1/houses",
             "headers": {},
@@ -166,6 +189,18 @@ def test_admin_api_routes(monkeypatch):
     )
     assert resp["statusCode"] == 200
     assert json.loads(resp["body"])["items"][0]["district_id"] == "d1"
+
+    resp = handler(
+        {
+            "httpMethod": "PATCH",
+            "path": "/api/v1/admin/cities/{cityId}/deactivate",
+            "headers": {},
+            "pathParams": {"cityId": "c1"},
+        },
+        None,
+    )
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["item"]["id"] == "c1"
 
     resp = handler({"httpMethod": "GET", "path": "/api/v1/admin/admin-users", "headers": {}}, None)
     assert resp["statusCode"] == 200
