@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import asyncio
 import base64
 from datetime import UTC, datetime, timedelta
+from difflib import SequenceMatcher
 import hashlib
 import hmac
 import json
@@ -27,6 +29,7 @@ from infrastructure.max.max_client import MaxClient
 from infrastructure.max.max_notification_channel import MaxNotificationChannel
 from infrastructure.max.max_webapp_validator import MaxWebAppValidator
 from infrastructure.max.max_webhook_parser import MaxWebhookParser
+from infrastructure.regioncity.regioncity_client import RegionCityClient
 from infrastructure.ydb.client import YdbClient, YdbConfig
 from infrastructure.ydb.repositories import (
     YdbAdminPermissionRepository,
@@ -65,12 +68,14 @@ class PublicService:
         subscriptions: YdbSubscriptionRepository | None = None,
         subscribe_uc: SubscribeUserToSubjectUseCase | None = None,
         secret_provider: SecretProvider | None = None,
+        max_bot_deeplink_base: str = "",
     ):
         self.subjects = subjects
         self.users = users
         self.subscriptions = subscriptions
         self.subscribe_uc = subscribe_uc
         self.secret_provider = secret_provider
+        self.max_bot_deeplink_base = max_bot_deeplink_base.rstrip("/")
 
     def list_cities(self):
         return self.subjects.list_cities()
@@ -100,7 +105,7 @@ class PublicService:
         return self.subjects.list_houses_by_street(street_id)
 
     def list_entrances(self, house_id: str):
-        return self.subjects.list_entrances_by_house(house_id)
+        return [self._entrance_response(item) for item in self.subjects.list_entrances_by_house(house_id)]
 
     def subscribe_from_mini_app(self, body: str | dict | None) -> dict:
         if not self.users or not self.subscriptions or not self.subscribe_uc or not self.secret_provider:
@@ -135,10 +140,25 @@ class PublicService:
             "house": data.get("house_name", ""),
             "entrance": data.get("entrance_number", ""),
             "address": data.get("address", ""),
-            "max_bot_link": f"/start e_{public_code}",
+            "public_url": self._public_url(public_code),
+            "max_bot_url": self._max_bot_url(public_code),
             "events": [],
             "mock": False,
         }
+
+    def _public_url(self, public_code: str) -> str:
+        base = os.getenv("PUBLIC_SITE_URL", "").rstrip("/")
+        return f"{base}/e/{public_code}" if base else f"/e/{public_code}"
+
+    def _max_bot_url(self, public_code: str) -> str:
+        return f"{self.max_bot_deeplink_base}?start=e_{public_code}" if self.max_bot_deeplink_base and public_code else ""
+
+    def _entrance_response(self, item: dict) -> dict:
+        result = dict(item)
+        if item.get("public_code"):
+            result["public_url"] = self._public_url(item["public_code"])
+            result["max_bot_url"] = self._max_bot_url(item["public_code"])
+        return result
 
 
 class AdminService:
@@ -155,6 +175,9 @@ class AdminService:
         notifier: NotificationService,
         session: Any,
         public_site_url: str = "",
+        max_bot_deeplink_base: str = "",
+        regioncity_client: RegionCityClient | None = None,
+        regioncity_map_objects_path: str = "/mapObjectManagement/mapObjects",
     ):
         self.admin_repo = admin_repo
         self.permissions = permissions
@@ -165,6 +188,9 @@ class AdminService:
         self.notifier = notifier
         self.session = session
         self.public_site_url = public_site_url.rstrip("/")
+        self.max_bot_deeplink_base = max_bot_deeplink_base.rstrip("/")
+        self.regioncity_client = regioncity_client
+        self.regioncity_map_objects_path = regioncity_map_objects_path
 
     def hash_password(self, raw: str) -> str:
         salt = secrets.token_bytes(16)
@@ -437,17 +463,20 @@ class AdminService:
         if error:
             return error
         data = _parse_json(body)
-        missing = self._required(data, ("entrance_number",))
+        missing = self._required(data, ("entrance_number", "regioncity_external_ref"))
         if missing:
             return {"error": "required_fields", "fields": missing}
         public_code = str(data.get("public_code") or uuid4().hex[:12]).strip()
+        external_ref = str(data.get("regioncity_external_ref") or "").strip()
         if len(public_code) > 80 or not all(character.isalnum() or character in "-_" for character in public_code):
             return {"error": "invalid_public_code"}
+        if self.subjects.find_by_external_ref(external_ref):
+            return {"error": "regioncity_map_object_id_conflict"}
         row = self.subjects.create_entrance(
             house_id,
             str(data["entrance_number"]).strip(),
             public_code,
-            str(data.get("regioncity_external_ref") or "").strip(),
+            external_ref,
         )
         if not row:
             return {"error": "public_code_conflict"}
@@ -457,6 +486,8 @@ class AdminService:
         result = dict(item)
         if self.public_site_url and item.get("public_code"):
             result["public_url"] = f"{self.public_site_url}/e/{item['public_code']}"
+        if self.max_bot_deeplink_base and item.get("public_code"):
+            result["max_bot_url"] = f"{self.max_bot_deeplink_base}?start=e_{item['public_code']}"
         return result
 
     def deactivate_district(self, headers: dict, district_id: str) -> dict:
@@ -488,6 +519,223 @@ class AdminService:
         if error:
             return error
         return {"item": self._entrance_response(self.subjects.deactivate_entrance(entrance_id))}
+
+    @staticmethod
+    def _norm(value: Any) -> str:
+        return " ".join(str(value or "").strip().lower().replace("ё", "е").split())
+
+    def _find_named(self, items: list[dict], name: str) -> dict | None:
+        normalized = self._norm(name)
+        return next((item for item in items if self._norm(item.get("name")) == normalized), None)
+
+    def _find_house_in_street(self, street_id: str, house_number: str, building: str) -> dict | None:
+        house_norm = self._norm(house_number)
+        building_norm = self._norm(building)
+        for house in self.subjects.list_houses_by_street(street_id):
+            if self._norm(house.get("house_number")) == house_norm and self._norm(house.get("building")) == building_norm:
+                return house
+        return None
+
+    def _find_entrance_in_house(self, house_id: str, entrance_number: str) -> dict | None:
+        entrance_norm = self._norm(entrance_number)
+        for entrance in self.subjects.list_entrances_by_house(house_id):
+            if self._norm(entrance.get("entrance_number")) == entrance_norm:
+                return entrance
+        return None
+
+    def _find_existing_address(self, row: dict) -> dict | None:
+        city = self._find_named(self.subjects.list_cities(), row["city"])
+        if not city:
+            return None
+        district = self._find_named(self.subjects.list_districts_by_city(city["id"]), row["district"])
+        if not district:
+            return None
+        street = self._find_named(self.subjects.list_streets_by_district(district["id"]), row["street"])
+        if not street:
+            return None
+        house = self._find_house_in_street(street["id"], row["house_number"], row.get("building", ""))
+        if not house:
+            return None
+        entrance = self._find_entrance_in_house(house["id"], row["entrance_number"])
+        return entrance
+
+    def _address_rows_for_districts(self, districts: list[dict]) -> list[dict]:
+        rows: list[dict] = []
+        for district in districts:
+            city = self.subjects.get_city_for_district(district["id"]) or {}
+            for street in self.subjects.list_streets_by_district(district["id"]):
+                for house in self.subjects.list_houses_by_street(street["id"]):
+                    for entrance in self.subjects.list_entrances_by_house(house["id"]):
+                        public_code = entrance.get("public_code", "")
+                        rows.append(
+                            {
+                                "city": city.get("name") or house.get("city", ""),
+                                "district": district.get("name", ""),
+                                "street": street.get("name") or house.get("street", ""),
+                                "house_number": house.get("house_number", ""),
+                                "building": house.get("building", ""),
+                                "entrance_number": entrance.get("entrance_number", ""),
+                                "public_code": public_code,
+                                "regioncity_map_object_id": entrance.get("regioncity_external_ref", ""),
+                                "public_url": f"{self.public_site_url}/e/{public_code}" if self.public_site_url and public_code else "",
+                                "max_bot_url": f"{self.max_bot_deeplink_base}?start=e_{public_code}" if self.max_bot_deeplink_base and public_code else "",
+                            }
+                        )
+        rows.sort(key=lambda item: (self._norm(item["city"]), self._norm(item["district"]), self._norm(item["street"]), self._norm(item["house_number"]), self._norm(item["entrance_number"])))
+        return rows
+
+    def export_addresses(self, headers: dict) -> dict:
+        principal = self._principal(headers)
+        if not principal:
+            return {"error": "unauthorized"}
+        districts = self.subjects.list_districts()
+        if principal.get("role") != "super_admin":
+            districts = [district for district in districts if self._can_manage_district(principal, district["id"])]
+        return {"items": self._address_rows_for_districts(districts)}
+
+    def _normalize_import_row(self, row: dict) -> dict:
+        return {
+            "city": str(row.get("city") or "").strip(),
+            "district": str(row.get("district") or "").strip(),
+            "street": str(row.get("street") or "").strip(),
+            "house_number": str(row.get("house_number") or "").strip(),
+            "building": str(row.get("building") or "").strip(),
+            "entrance_number": str(row.get("entrance_number") or "").strip(),
+            "public_code": str(row.get("public_code") or "").strip(),
+            "regioncity_map_object_id": str(row.get("regioncity_map_object_id") or row.get("regioncity_external_ref") or row.get("mapObjectID") or "").strip(),
+        }
+
+    def _preview_address_import(self, rows: list[dict]) -> list[dict]:
+        public_codes: dict[str, int] = {}
+        external_refs: dict[str, int] = {}
+        result = []
+        for index, source in enumerate(rows, start=1):
+            row = self._normalize_import_row(source)
+            errors: list[str] = []
+            for field in ("city", "district", "street", "house_number", "entrance_number", "regioncity_map_object_id"):
+                if not row[field]:
+                    errors.append(f"{field}_required")
+            if row["public_code"] and (len(row["public_code"]) > 80 or not all(character.isalnum() or character in "-_" for character in row["public_code"])):
+                errors.append("invalid_public_code")
+            if row["public_code"]:
+                if row["public_code"] in public_codes:
+                    errors.append(f"duplicate_public_code_row_{public_codes[row['public_code']]}")
+                public_codes[row["public_code"]] = index
+            if row["regioncity_map_object_id"]:
+                if row["regioncity_map_object_id"] in external_refs:
+                    errors.append(f"duplicate_regioncity_map_object_id_row_{external_refs[row['regioncity_map_object_id']]}")
+                external_refs[row["regioncity_map_object_id"]] = index
+
+            existing = self._find_existing_address(row) if not errors else None
+            if row["public_code"]:
+                subject = self.subjects.get_by_public_code(row["public_code"])
+                if subject and (not existing or subject.subject_id != existing["id"]):
+                    errors.append("public_code_conflict")
+            if row["regioncity_map_object_id"]:
+                subject = self.subjects.find_by_external_ref(row["regioncity_map_object_id"])
+                if subject and (not existing or subject.subject_id != existing["id"]):
+                    errors.append("regioncity_map_object_id_conflict")
+
+            action = "update" if existing else "create"
+            if errors:
+                action = "error"
+            result.append({"row_number": index, "action": action, "errors": errors, "item": row})
+        return result
+
+    def preview_address_import(self, headers: dict, body: str | dict | None) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        data = _parse_json(body)
+        rows = data.get("items") or data.get("rows") or []
+        if not isinstance(rows, list) or not rows:
+            return {"error": "required_fields", "fields": ["items"]}
+        return {"items": self._preview_address_import(rows)}
+
+    def apply_address_import(self, headers: dict, body: str | dict | None) -> dict:
+        _, error = self._super_admin(headers)
+        if error:
+            return error
+        data = _parse_json(body)
+        rows = data.get("items") or data.get("rows") or []
+        if not isinstance(rows, list) or not rows:
+            return {"error": "required_fields", "fields": ["items"]}
+        preview = self._preview_address_import(rows)
+        if any(item["errors"] for item in preview):
+            return {"error": "import_has_errors", "items": preview}
+        created = 0
+        updated = 0
+        for preview_item in preview:
+            row = preview_item["item"]
+            city = self._find_named(self.subjects.list_cities(), row["city"]) or self.subjects.create_city(row["city"])
+            district = self._find_named(self.subjects.list_districts_by_city(city["id"]), row["district"])
+            if not district:
+                district = self._find_named(self.subjects.list_unassigned_districts(), row["district"]) or self.subjects.create_district(row["district"])
+                self.subjects.link_district_to_city(city["id"], district["id"])
+            street = self._find_named(self.subjects.list_streets_by_district(district["id"]), row["street"]) or self.subjects.create_street(district["id"], row["street"])
+            house = self._find_house_in_street(street["id"], row["house_number"], row["building"]) or self.subjects.create_house(district["id"], city["name"], street["name"], row["house_number"], row["building"], street["id"])
+            entrance = self._find_entrance_in_house(house["id"], row["entrance_number"])
+            public_code = row["public_code"] or (entrance or {}).get("public_code") or uuid4().hex[:12]
+            if entrance:
+                self.subjects.update_entrance_refs(entrance["id"], public_code, row["regioncity_map_object_id"])
+                updated += 1
+            else:
+                created_item = self.subjects.create_entrance(house["id"], row["entrance_number"], public_code, row["regioncity_map_object_id"])
+                if not created_item:
+                    return {"error": "public_code_conflict", "items": preview}
+                created += 1
+        return {"created": created, "updated": updated, "items": preview}
+
+    @staticmethod
+    def _candidate_value(item: dict, *keys: str) -> str:
+        for key in keys:
+            value = item.get(key)
+            if value:
+                return str(value)
+        return ""
+
+    def _address_score(self, requested: str, candidate: str) -> float:
+        left = self._norm(requested)
+        right = self._norm(candidate)
+        if not left or not right:
+            return 0.0
+        ratio = SequenceMatcher(None, left, right).ratio()
+        left_tokens = set(left.split())
+        right_tokens = set(right.split())
+        overlap = len(left_tokens & right_tokens) / max(len(left_tokens), 1)
+        return round(max(ratio, overlap), 3)
+
+    def search_regioncity_map_objects(self, headers: dict, params: dict) -> dict:
+        principal = self._principal(headers)
+        if not principal:
+            return {"error": "unauthorized"}
+        address = str(params.get("address") or "").strip()
+        if not address:
+            return {"error": "required_fields", "fields": ["address"]}
+        if not self.regioncity_client:
+            return {"error": "configuration_error"}
+        try:
+            items = asyncio.run(self.regioncity_client.list_map_objects(self.regioncity_map_objects_path, address=address))
+        except Exception:
+            return {"error": "regioncity_unavailable"}
+        candidates = []
+        for item in items:
+            map_object_id = self._candidate_value(item, "mapObjectID", "objectID", "id")
+            candidate_address = self._candidate_value(item, "address", "fullAddress", "displayAddress")
+            if not map_object_id or not candidate_address:
+                continue
+            score = self._address_score(address, candidate_address)
+            candidates.append(
+                {
+                    "map_object_id": map_object_id,
+                    "address": candidate_address,
+                    "title": self._candidate_value(item, "title", "name", "objectName"),
+                    "object_type": self._candidate_value(item, "objectType", "type", "mapObjectType"),
+                    "score": score,
+                }
+            )
+        candidates.sort(key=lambda item: item["score"], reverse=True)
+        return {"items": candidates[:10]}
 
     def list_resident_users(self, headers: dict) -> dict:
         _, error = self._super_admin(headers)
@@ -582,6 +830,13 @@ class BotService:
 
     def handle_payload(self, payload: dict):
         text = self.webhook_parser.message_text(payload)
+        start_payload = self.webhook_parser.bot_start_payload(payload)
+        if start_payload:
+            ext_user = self.webhook_parser.external_user_id(payload) or "unknown"
+            user = self.users.get_or_create_channel_user("max", ext_user, self.webhook_parser.display_name(payload))
+            if start_payload.startswith("e_"):
+                return self._subscribe_by_public_code(user.user_id, start_payload[2:])
+            return self._welcome()
         action = self.webhook_parser.callback_payload(payload)
         ext_user = self.webhook_parser.external_user_id(payload) or "unknown"
         user = self.users.get_or_create_channel_user("max", ext_user, self.webhook_parser.display_name(payload))
@@ -685,7 +940,7 @@ class BotService:
                 "Здравствуйте. Я буду присылать уведомления по вашим адресам.\n\n"
                 "Как начать:\n"
                 "1. Откройте QR-код у нужного подъезда или публичную страницу адреса.\n"
-                "2. Нажмите «Подписаться в MAX».\n"
+                "2. Нажмите «Перейти в MAX».\n"
                 "3. Бот сам добавит адрес в ваши подписки.\n\n"
                 "Также можно нажать «Выбрать адрес» и найти адрес прямо из меню бота.\n\n"
                 "Квартиру указывать не нужно."
@@ -710,7 +965,7 @@ class BotService:
             "message": (
                 "Нажмите «Выбрать адрес» и найдите адрес в списке.\n\n"
                 "Еще можно отсканировать QR-код у подъезда или открыть публичную страницу адреса "
-                "и нажать «Подписаться в MAX».\n\n"
+                "и нажать «Перейти в MAX».\n\n"
                 "Если у вас уже есть код из ссылки, отправьте: «Подписаться КОД»."
             ),
             "keyboard": self._main_keyboard(),
@@ -758,7 +1013,7 @@ class BotService:
         items = self._active_subjects(user_id)
         if not items:
             return {
-                "message": "У вас пока нет адресов. Нажмите «Выбрать адрес» или откройте QR-код подъезда и нажмите «Подписаться в MAX».",
+                "message": "У вас пока нет адресов. Нажмите «Выбрать адрес» или откройте QR-код подъезда и нажмите «Перейти в MAX».",
                 "keyboard": self._main_keyboard(),
             }
         lines = ["Ваши адреса:"]
@@ -912,6 +1167,7 @@ def build_container() -> AppContainer:
 
     secret = YandexLockboxSecretProvider(settings.env)
     max_channel = MaxNotificationChannel(MaxClient(secret, settings.max_api_base_url))
+    regioncity_client = RegionCityClient(secret, settings.regioncity_base_url)
     notifier = NotificationService(processed, _Registry(max_channel), CodeTemplateProvider())
 
     return AppContainer(
@@ -930,8 +1186,22 @@ def build_container() -> AppContainer:
             subscriptions,
             SubscribeUserToSubjectUseCase(subjects, subscriptions),
             secret,
+            settings.max_bot_deeplink_base,
         ),
-        admin_service=AdminService(admin_users, admin_permissions, subjects, users, subscriptions, secret, notifier, session, settings.public_site_url),
+        admin_service=AdminService(
+            admin_users,
+            admin_permissions,
+            subjects,
+            users,
+            subscriptions,
+            secret,
+            notifier,
+            session,
+            settings.public_site_url,
+            settings.max_bot_deeplink_base,
+            regioncity_client,
+            settings.regioncity_map_objects_path,
+        ),
         polling_use_case=_Mock(),
         notification_service=notifier,
         bot_reply_channel=max_channel,

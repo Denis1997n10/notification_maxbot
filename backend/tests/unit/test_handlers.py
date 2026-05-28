@@ -52,6 +52,10 @@ class DummyAdminService:
     def create_admin_user(self, headers, body): return {"item": {"id": "a2"}}
     def deactivate_admin_user(self, headers, admin_id): return {"item": {"id": admin_id, "is_active": False}}
     def send_test_notification(self, headers, body): return {"sent": 1}
+    def export_addresses(self, headers): return {"items": [{"public_code": "pc1", "max_bot_url": "https://max.ru/b?start=e_pc1"}]}
+    def preview_address_import(self, headers, body): return {"items": [{"row_number": 1, "action": "create", "errors": []}]}
+    def apply_address_import(self, headers, body): return {"created": 1, "updated": 0}
+    def search_regioncity_map_objects(self, headers, params): return {"items": [{"map_object_id": "m1", "address": params.get("address", ""), "score": 1.0}]}
 
 
 class DummyPolling:
@@ -307,6 +311,25 @@ def test_admin_api_routes(monkeypatch):
     )
     assert resp["statusCode"] == 200
     assert json.loads(resp["body"])["item"]["is_active"] is False
+
+    resp = handler({"httpMethod": "GET", "path": "/api/v1/admin/address-export", "headers": {}}, None)
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["items"][0]["max_bot_url"].endswith("e_pc1")
+
+    resp = handler({"httpMethod": "POST", "path": "/api/v1/admin/address-import/preview", "headers": {}, "body": "{}"}, None)
+    assert resp["statusCode"] == 200
+
+    resp = handler(
+        {
+            "httpMethod": "GET",
+            "path": "/api/v1/admin/regioncity/map-objects/search",
+            "headers": {},
+            "queryStringParameters": {"address": "Санкт-Петербург"},
+        },
+        None,
+    )
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"])["items"][0]["map_object_id"] == "m1"
 
 
 def test_bot_webhook_rejects_invalid_secret(monkeypatch):

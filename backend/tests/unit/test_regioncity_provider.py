@@ -69,3 +69,28 @@ def test_provider_uses_map_object_lookup_and_skips_missing_subject():
     assert len(events) == 1
     assert events[0].external_id == "1"
     assert repo.lookups == ["found", "missing"]
+
+
+def test_regioncity_map_objects_response_maps_candidates():
+    from composition.container import AdminService
+
+    class FakeRegionCityClient:
+        async def list_map_objects(self, path, address=None):
+            assert path == "/mapObjectManagement/mapObjects"
+            return [
+                {"mapObjectID": "18864279", "address": "Санкт-Петербург, Приморский район, дом 1, подъезд 2", "name": "Подъезд 2", "objectType": "entrance"},
+                {"objectID": "no-address"},
+            ]
+
+    class Service(AdminService):
+        def __init__(self):
+            self.regioncity_client = FakeRegionCityClient()
+            self.regioncity_map_objects_path = "/mapObjectManagement/mapObjects"
+
+        def _principal(self, headers):
+            return {"sub": "a1", "role": "super_admin"}
+
+    result = Service().search_regioncity_map_objects({}, {"address": "Санкт-Петербург Приморский дом 1 подъезд 2"})
+    assert result["items"][0]["map_object_id"] == "18864279"
+    assert result["items"][0]["object_type"] == "entrance"
+    assert result["items"][0]["score"] > 0.5

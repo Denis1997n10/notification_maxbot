@@ -57,9 +57,31 @@ class MaxWebhookParser:
         )
 
     def parse_start_public_code(self, payload: dict) -> str | None:
+        bot_payload = self.bot_start_payload(payload)
+        if bot_payload:
+            return bot_payload
         text = self.message_text(payload)
         if text.startswith("/start "):
             return text.split(" ", 1)[1]
+        return None
+
+    def bot_start_payload(self, payload: dict) -> str | None:
+        update_type = str(payload.get("update_type") or payload.get("updateType") or payload.get("type") or "")
+        bot_started = payload.get("bot_started") or payload.get("botStarted") or {}
+        is_bot_started = update_type == "bot_started" or bool(bot_started)
+        if not is_bot_started:
+            return None
+        candidates = (
+            bot_started.get("payload") if isinstance(bot_started, dict) else None,
+            bot_started.get("start_payload") if isinstance(bot_started, dict) else None,
+            bot_started.get("startPayload") if isinstance(bot_started, dict) else None,
+            payload.get("start_payload"),
+            payload.get("startPayload"),
+            payload.get("payload"),
+        )
+        for candidate in candidates:
+            if candidate:
+                return str(candidate).strip()
         return None
 
     def parse_action(self, payload: dict) -> str | None:

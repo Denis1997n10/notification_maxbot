@@ -387,6 +387,31 @@ class YdbSubjectRepository(SubjectRepository):
         )
         return row
 
+    def update_entrance_refs(self, entrance_id: str, public_code: str, external_ref: str) -> dict | None:
+        row = self.get_entrance(entrance_id)
+        if not row:
+            return None
+        row["public_code"] = public_code
+        row["regioncity_external_ref"] = external_ref
+        row["updated_at"] = _now()
+        self.session.execute(
+            """
+            UPSERT INTO entrances (id,house_id,entrance_number,public_code,regioncity_external_ref,is_active,created_at,updated_at)
+            VALUES ($id,$house_id,$entrance_number,$public_code,$regioncity_external_ref,$is_active,$created_at,$updated_at)
+            """,
+            {
+                "$id": row["id"],
+                "$house_id": row["house_id"],
+                "$entrance_number": row["entrance_number"],
+                "$public_code": row["public_code"],
+                "$regioncity_external_ref": row["regioncity_external_ref"],
+                "$is_active": row.get("is_active", True),
+                "$created_at": row["created_at"],
+                "$updated_at": row["updated_at"],
+            },
+        )
+        return row
+
     def deactivate_district(self, district_id: str) -> dict | None:
         row = self.get_district(district_id)
         if not row:

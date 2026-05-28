@@ -14,7 +14,9 @@ def _admin_response(result: dict, success_status: int = 200) -> dict[str, Any]:
         "forbidden": 403,
         "not_found": 404,
         "public_code_conflict": 409,
+        "regioncity_map_object_id_conflict": 409,
         "login_conflict": 409,
+        "regioncity_unavailable": 502,
     }
     return api_response(status_by_error.get(result.get("error"), 400) if "error" in result else success_status, result)
 
@@ -32,7 +34,7 @@ def _path_param(params: dict[str, Any], path: str, key: str, marker: str) -> str
 
 def _event_params(event: dict[str, Any]) -> dict[str, Any]:
     params: dict[str, Any] = {}
-    for key in ("parameters", "params", "pathParameters", "pathParams"):
+    for key in ("parameters", "params", "pathParameters", "pathParams", "queryStringParameters"):
         value = event.get(key)
         if isinstance(value, dict):
             params.update(value)
@@ -97,6 +99,14 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         return _admin_response(container.admin_service.deactivate_house(headers, _path_param(params, path, "houseId", "houses")))
     if path.startswith("/api/v1/admin/entrances/") and path.endswith("/deactivate") and method == "PATCH":
         return _admin_response(container.admin_service.deactivate_entrance(headers, _path_param(params, path, "entranceId", "entrances")))
+    if path == "/api/v1/admin/address-export" and method == "GET":
+        return _admin_response(container.admin_service.export_addresses(headers))
+    if path == "/api/v1/admin/address-import/preview" and method == "POST":
+        return _admin_response(container.admin_service.preview_address_import(headers, body))
+    if path == "/api/v1/admin/address-import/apply" and method == "POST":
+        return _admin_response(container.admin_service.apply_address_import(headers, body))
+    if path == "/api/v1/admin/regioncity/map-objects/search" and method == "GET":
+        return _admin_response(container.admin_service.search_regioncity_map_objects(headers, params))
     if path == "/api/v1/admin/users" and method == "GET":
         return _admin_response(container.admin_service.list_resident_users(headers))
     if path.startswith("/api/v1/admin/users/") and path.endswith("/deactivate") and method == "PATCH":

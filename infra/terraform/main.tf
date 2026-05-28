@@ -42,6 +42,12 @@ locals {
 
   admin_secrets = var.function_use_mocks ? [] : [
     {
+      id                   = var.regioncity_api_token_secret_id
+      version_id           = var.regioncity_api_token_secret_version_id
+      key                  = "REGIONCITY_API_TOKEN"
+      environment_variable = "REGIONCITY_API_TOKEN"
+    },
+    {
       id                   = var.max_bot_token_secret_id
       version_id           = var.max_bot_token_secret_version_id
       key                  = "MAX_BOT_TOKEN"
@@ -80,18 +86,20 @@ locals {
   ]
 
   common_env = {
-    ENV                        = var.environment
-    REGIONCITY_BASE_URL        = var.regioncity_base_url
-    MAX_API_BASE_URL           = var.max_api_base_url
-    PUBLIC_SITE_URL            = var.public_site_url
-    ADMIN_SITE_URL             = var.admin_site_url
-    CACHE_TTL_MINUTES          = tostring(var.cache_ttl_minutes)
-    POLLING_INTERVAL_MINUTES   = tostring(var.polling_interval_minutes)
-    POLLING_OVERLAP_MINUTES    = tostring(var.polling_overlap_minutes)
-    MAX_SUBSCRIPTIONS_PER_USER = tostring(var.max_subscriptions_per_user)
-    YDB_ENDPOINT               = "grpcs://${yandex_ydb_database_serverless.db.ydb_api_endpoint}"
-    YDB_DATABASE               = yandex_ydb_database_serverless.db.database_path
-    YDB_METADATA_CREDENTIALS   = "1"
+    ENV                         = var.environment
+    REGIONCITY_BASE_URL         = var.regioncity_base_url
+    REGIONCITY_MAP_OBJECTS_PATH = var.regioncity_map_objects_path
+    MAX_API_BASE_URL            = var.max_api_base_url
+    MAX_BOT_DEEPLINK_BASE       = var.max_bot_deeplink_base
+    PUBLIC_SITE_URL             = var.public_site_url
+    ADMIN_SITE_URL              = var.admin_site_url
+    CACHE_TTL_MINUTES           = tostring(var.cache_ttl_minutes)
+    POLLING_INTERVAL_MINUTES    = tostring(var.polling_interval_minutes)
+    POLLING_OVERLAP_MINUTES     = tostring(var.polling_overlap_minutes)
+    MAX_SUBSCRIPTIONS_PER_USER  = tostring(var.max_subscriptions_per_user)
+    YDB_ENDPOINT                = "grpcs://${yandex_ydb_database_serverless.db.ydb_api_endpoint}"
+    YDB_DATABASE                = yandex_ydb_database_serverless.db.database_path
+    YDB_METADATA_CREDENTIALS    = "1"
 
     REGIONCITY_API_TOKEN_SECRET_ID = var.regioncity_api_token_secret_id
     MAX_BOT_TOKEN_SECRET_ID        = var.max_bot_token_secret_id

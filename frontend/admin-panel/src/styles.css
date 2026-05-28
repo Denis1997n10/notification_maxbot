@@ -166,6 +166,23 @@ select:focus {
   background: #eef7f3;
 }
 
+.file-button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #cfe0d8;
+  border-radius: 11px;
+  color: #12674e;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 650;
+  justify-content: center;
+  padding: 12px 17px;
+}
+
+.file-button input {
+  display: none;
+}
+
 .alert {
   border-radius: 12px;
   font-size: 0.92rem;
@@ -299,6 +316,51 @@ select:focus {
 
 .workspace > .alert {
   margin-bottom: 18px;
+}
+
+.tools-panel {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.import-preview {
+  display: grid;
+  gap: 12px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  min-width: 760px;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e3e9e6;
+  padding: 10px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: #617179;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.bad-row td {
+  background: #fff6f2;
 }
 
 .directory-grid {
@@ -448,6 +510,49 @@ select:focus {
   display: block;
   font-size: 0.79rem;
   margin-top: 6px;
+}
+
+.ok-text {
+  color: #12674e !important;
+}
+
+.warn-text {
+  color: #a15c17 !important;
+}
+
+.qr-code.small {
+  background: #fff;
+  border: 1px solid #dbe4df;
+  border-radius: 12px;
+  height: 92px;
+  padding: 7px;
+  width: 92px;
+}
+
+.regioncity-box {
+  background: #f7faf8;
+  border: 1px solid #dfe8e4;
+  border-radius: 16px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.candidate-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.candidate-list .select {
+  align-items: flex-start;
+  display: grid;
+  gap: 4px;
+  line-height: 1.35;
+  text-align: left;
+  width: 100%;
 }
 
 .object-panel .select-list.houses {

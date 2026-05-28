@@ -39,6 +39,18 @@ class RegionCityClient:
     async def get_task_detail(self, task_id: str) -> dict:
         return await self._request(f"/taskManagement/tasks/{task_id}")
 
+    async def list_map_objects(self, path: str = "/mapObjectManagement/mapObjects", address: str | None = None) -> list[dict]:
+        params = {"address": address} if address else None
+        data = await self._request(path, params=params)
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for key in ("items", "data", "result", "mapObjects", "objects"):
+                value = data.get(key)
+                if isinstance(value, list):
+                    return value
+        return []
+
     async def _request(self, path: str, params: dict | None = None) -> dict | list[dict]:
         token = self._secret_provider.get_secret("REGIONCITY_API_TOKEN")
         headers = {"Authorization": f"Bearer {token}"}

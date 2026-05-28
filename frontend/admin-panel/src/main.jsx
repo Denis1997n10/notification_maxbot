@@ -1,5 +1,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
+import QRCode from 'qrcode'
+import * as XLSX from 'xlsx'
 import './styles.css'
 
 const API = import.meta.env.VITE_ADMIN_API_BASE_URL || ''
@@ -17,7 +19,20 @@ const errorMessages = {
   city_required: 'Сначала привяжите район к городу.',
   user_id_required: 'Укажите MAX user ID.',
   invalid_credentials: 'Неверный логин или пароль.',
+  import_has_errors: 'В файле есть ошибки. Исправьте строки перед импортом.',
+  regioncity_unavailable: 'RegionCity временно недоступен или вернул ошибку.',
 }
+
+const ADDRESS_COLUMNS = [
+  'city',
+  'district',
+  'street',
+  'house_number',
+  'building',
+  'entrance_number',
+  'public_code',
+  'regioncity_map_object_id',
+]
 
 function describeError(data, fallback = 'Не удалось выполнить операцию.') {
   return errorMessages[data?.error] || fallback
@@ -79,6 +94,47 @@ function Empty({ children }) {
   return <p className='empty'>{children}</p>
 }
 
+function QrCodeImage({ value }) {
+  const [src, setSrc] = React.useState('')
+
+  React.useEffect(() => {
+    let active = true
+    if (!value) {
+      setSrc('')
+      return undefined
+    }
+    QRCode.toDataURL(value, { margin: 1, width: 132 })
+      .then((dataUrl) => {
+        if (active) setSrc(dataUrl)
+      })
+      .catch(() => {
+        if (active) setSrc('')
+      })
+    return () => {
+      active = false
+    }
+  }, [value])
+
+  if (!value || !src) return null
+  return <img className='qr-code small' src={src} alt='QR-код MAX' />
+}
+
+function downloadWorkbook(filename, rows) {
+  const worksheet = XLSX.utils.json_to_sheet(rows.length ? rows : [Object.fromEntries(ADDRESS_COLUMNS.map((key) => [key, '']))], {
+    header: ADDRESS_COLUMNS,
+  })
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'addresses')
+  XLSX.writeFile(workbook, filename)
+}
+
+async function readWorkbookRows(file) {
+  const buffer = await file.arrayBuffer()
+  const workbook = XLSX.read(buffer)
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  return XLSX.utils.sheet_to_json(sheet, { defval: '' })
+}
+
 function Dashboard({ token, principal, onLogout }) {
   const [cities, setCities] = React.useState([])
   const [cityId, setCityId] = React.useState('')
@@ -95,6 +151,11 @@ function Dashboard({ token, principal, onLogout }) {
   const [admins, setAdmins] = React.useState([])
   const [newAdminRole, setNewAdminRole] = React.useState('district_admin')
   const [testUserId, setTestUserId] = React.useState('')
+  const [importRows, setImportRows] = React.useState([])
+  const [importPreview, setImportPreview] = React.useState([])
+  const [newEntrance, setNewEntrance] = React.useState({ entrance_number: '', public_code: '', regioncity_external_ref: '' })
+  const [regionCityCandidates, setRegionCityCandidates] = React.useState([])
+  const [regionCityBusy, setRegionCityBusy] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [busy, setBusy] = React.useState(false)
   const [notice, setNotice] = React.useState('')
@@ -214,6 +275,8 @@ function Dashboard({ token, principal, onLogout }) {
 
   React.useEffect(() => {
     if (houseId) loadEntrances(houseId).catch(requestError => setError(requestError.message))
+    setNewEntrance({ entrance_number: '', public_code: '', regioncity_external_ref: '' })
+    setRegionCityCandidates([])
   }, [houseId])
 
   async function mutate(action, successMessage) {
@@ -296,14 +359,91 @@ function Dashboard({ token, principal, onLogout }) {
 
   async function createEntrance(event) {
     event.preventDefault()
-    const formElement = event.currentTarget
-    const form = Object.fromEntries(new FormData(formElement).entries())
+    if (!newEntrance.regioncity_external_ref.trim()) {
+      setError('Выберите объект RegionCity или укажите mapObjectID.')
+      return
+    }
     const result = await mutate(() => request(`/api/v1/admin/houses/${houseId}/entrances`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newEntrance),
     }), 'Подъезд создан.')
     if (result) {
-      formElement.reset()
+      setNewEntrance({ entrance_number: '', public_code: '', regioncity_external_ref: '' })
+      setRegionCityCandidates([])
       await loadEntrances(houseId)
+    }
+  }
+
+  function entranceAddress(entranceNumber = newEntrance.entrance_number) {
+    return [
+      city?.name,
+      district?.name,
+      street?.name,
+      house ? `дом ${house.house_number}${house.building ? ` к${house.building}` : ''}` : '',
+      entranceNumber ? `подъезд ${entranceNumber}` : '',
+    ].filter(Boolean).join(', ')
+  }
+
+  async function searchRegionCityObjects() {
+    const address = entranceAddress()
+    if (!address || !newEntrance.entrance_number.trim()) {
+      setError('Укажите подъезд перед поиском RegionCity.')
+      return
+    }
+    setRegionCityBusy(true)
+    setError('')
+    try {
+      const data = await request(`/api/v1/admin/regioncity/map-objects/search?address=${encodeURIComponent(address)}`)
+      setRegionCityCandidates(data.items || [])
+      if ((data.items || []).length === 0) setError('RegionCity не вернул похожих объектов.')
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setRegionCityBusy(false)
+    }
+  }
+
+  async function exportAddresses() {
+    const data = await mutate(() => request('/api/v1/admin/address-export'), 'Справочник выгружен.')
+    if (data) downloadWorkbook('resident-notifications-addresses.xlsx', data.items || [])
+  }
+
+  function downloadTemplate() {
+    downloadWorkbook('resident-notifications-address-template.xlsx', [])
+  }
+
+  async function previewImport(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const rows = await readWorkbookRows(file)
+      setImportRows(rows)
+      const data = await request('/api/v1/admin/address-import/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: rows }),
+      })
+      setImportPreview(data.items || [])
+      setNotice('Файл проверен. Примените импорт, если ошибок нет.')
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setBusy(false)
+      event.target.value = ''
+    }
+  }
+
+  async function applyImport() {
+    const result = await mutate(() => request('/api/v1/admin/address-import/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: importRows }),
+    }), 'Импорт применён.')
+    if (result) {
+      setImportPreview(result.items || [])
+      await Promise.all([loadCities(), loadSuperAdminData()])
     }
   }
 
@@ -380,6 +520,42 @@ function Dashboard({ token, principal, onLogout }) {
 
       {(notice || error) && <div className={`alert ${error ? 'error' : 'success'}`} role='status'>{error || notice}</div>}
 
+      <section className='panel tools-panel'>
+        <div>
+          <p className='eyebrow'>Excel и QR</p>
+          <h2>Обмен справочником адресов</h2>
+          <p className='muted'>Экспортируйте текущий справочник, скачайте шаблон или загрузите Excel для предварительной проверки.</p>
+        </div>
+        <div className='tool-actions'>
+          <button type='button' className='secondary' onClick={exportAddresses} disabled={busy}>Экспорт Excel</button>
+          <button type='button' className='secondary' onClick={downloadTemplate} disabled={busy}>Скачать шаблон</button>
+          {isSuperAdmin && <label className='file-button'>
+            Импорт Excel
+            <input type='file' accept='.xlsx,.xls' onChange={previewImport} disabled={busy} />
+          </label>}
+        </div>
+        {importPreview.length > 0 && <div className='import-preview'>
+          <div className='panel-title'><h3>Предпросмотр импорта</h3><span className='tag'>{importPreview.length} строк</span></div>
+          <div className='table-scroll'>
+            <table>
+              <thead><tr><th>Строка</th><th>Действие</th><th>Адрес</th><th>mapObjectID</th><th>Ошибки</th></tr></thead>
+              <tbody>
+                {importPreview.map(item => <tr key={item.row_number} className={item.errors.length ? 'bad-row' : ''}>
+                  <td>{item.row_number}</td>
+                  <td>{item.action}</td>
+                  <td>{[item.item.city, item.item.district, item.item.street, item.item.house_number, item.item.entrance_number].filter(Boolean).join(', ')}</td>
+                  <td>{item.item.regioncity_map_object_id}</td>
+                  <td>{item.errors.join(', ') || 'ok'}</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+          {isSuperAdmin && <button type='button' className='primary' onClick={applyImport} disabled={busy || importPreview.some(item => item.errors.length)}>
+            Применить импорт
+          </button>}
+        </div>}
+      </section>
+
       <div className='directory-grid' aria-busy={busy || loading}>
         <section className='panel'>
           <div className='panel-title'><h2>Города</h2><span className='tag'>{isSuperAdmin ? 'управление' : 'только выбор'}</span></div>
@@ -451,15 +627,61 @@ function Dashboard({ token, principal, onLogout }) {
                 <div className='entrance-details'>
                   <strong>Подъезд {item.entrance_number}</strong>
                   <small>Код: {item.public_code}</small>
+                  <small className={item.regioncity_external_ref ? 'ok-text' : 'warn-text'}>
+                    {item.regioncity_external_ref ? `RegionCity: ${item.regioncity_external_ref}` : 'Требует привязки RegionCity'}
+                  </small>
                   {item.public_url && <a href={item.public_url} target='_blank' rel='noreferrer'>Публичная страница</a>}
+                  {item.max_bot_url && <a href={item.max_bot_url} target='_blank' rel='noreferrer'>Открыть MAX</a>}
                 </div>
+                <QrCodeImage value={item.max_bot_url} />
                 <button type='button' className='danger-link' onClick={() => deactivate('entrances', item.id, 'подъезд')} disabled={busy}>Отключить</button>
               </li>)}
             </ul>}
             <form className='edit-form inline-form' onSubmit={createEntrance}>
-              <div className='split'><input name='entrance_number' placeholder='Подъезд' required /><input name='public_code' placeholder='Публичный код (авто)' /></div>
-              <input name='regioncity_external_ref' placeholder='RegionCity mapObjectID (опционально)' />
-              <button type='submit' className='primary' disabled={busy}>Добавить подъезд</button>
+              <div className='split'>
+                <input
+                  name='entrance_number'
+                  placeholder='Подъезд'
+                  required
+                  value={newEntrance.entrance_number}
+                  onChange={event => setNewEntrance(state => ({ ...state, entrance_number: event.target.value }))}
+                />
+                <input
+                  name='public_code'
+                  placeholder='Публичный код (авто)'
+                  value={newEntrance.public_code}
+                  onChange={event => setNewEntrance(state => ({ ...state, public_code: event.target.value }))}
+                />
+              </div>
+              <div className='regioncity-box'>
+                <div>
+                  <strong>RegionCity mapObjectID</strong>
+                  <p className='muted'>Поиск выполняется по адресу: {entranceAddress() || 'укажите подъезд'}</p>
+                </div>
+                <div className='split'>
+                  <input
+                    name='regioncity_external_ref'
+                    placeholder='mapObjectID'
+                    required
+                    readOnly={!isSuperAdmin}
+                    value={newEntrance.regioncity_external_ref}
+                    onChange={event => setNewEntrance(state => ({ ...state, regioncity_external_ref: event.target.value }))}
+                  />
+                  <button type='button' className='secondary' onClick={searchRegionCityObjects} disabled={busy || regionCityBusy || !newEntrance.entrance_number}>
+                    {regionCityBusy ? 'Ищем...' : 'Найти в RegionCity'}
+                  </button>
+                </div>
+                {regionCityCandidates.length > 0 && <ul className='candidate-list'>
+                  {regionCityCandidates.map(candidate => <li key={candidate.map_object_id}>
+                    <button type='button' className='select' onClick={() => setNewEntrance(state => ({ ...state, regioncity_external_ref: candidate.map_object_id }))}>
+                      <strong>{candidate.map_object_id}</strong>
+                      <span>{candidate.address}</span>
+                      <small>Совпадение: {Math.round(candidate.score * 100)}%</small>
+                    </button>
+                  </li>)}
+                </ul>}
+              </div>
+              <button type='submit' className='primary' disabled={busy || !newEntrance.regioncity_external_ref.trim()}>Добавить подъезд</button>
             </form>
           </div>}
         </section>

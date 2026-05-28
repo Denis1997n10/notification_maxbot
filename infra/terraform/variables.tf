@@ -99,9 +99,19 @@ variable "regioncity_base_url" {
   default = "https://api.mpoisk.ru/v6/api"
 }
 
+variable "regioncity_map_objects_path" {
+  type    = string
+  default = "/mapObjectManagement/mapObjects"
+}
+
 variable "max_api_base_url" {
   type    = string
   default = "https://platform-api.max.ru"
+}
+
+variable "max_bot_deeplink_base" {
+  type    = string
+  default = ""
 }
 
 variable "cache_ttl_minutes" {

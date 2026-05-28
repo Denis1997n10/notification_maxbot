@@ -22,7 +22,7 @@ def _path_param(params: dict[str, Any], path: str, key: str, marker: str) -> str
 
 def _event_params(event: dict[str, Any]) -> dict[str, Any]:
     params: dict[str, Any] = {}
-    for key in ("parameters", "params", "pathParameters", "pathParams"):
+    for key in ("parameters", "params", "pathParameters", "pathParams", "queryStringParameters"):
         value = event.get(key)
         if isinstance(value, dict):
             params.update(value)

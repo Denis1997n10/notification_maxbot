@@ -76,7 +76,7 @@ ADMIN_BOOTSTRAP_LOGIN='<login>' ADMIN_BOOTSTRAP_PASSWORD='<strong-password>' bas
 bash scripts/register_max_webhook.sh prod set
 ```
 
-`bootstrap_yc.sh prod` запрашивает RegionCity API token, MAX bot token, admin JWT secret и MAX webhook secret и сохраняет в локальные файлы только Lockbox IDs/version IDs. `deploy_all.sh prod` создаёт static website buckets и собирает admin/public frontend с URL созданного API Gateway. `register_max_webhook.sh prod set` получает токен и secret непосредственно из Lockbox и регистрирует события `message_created` и `bot_started`; значение `MAX_WEBHOOK_SECRET` защищает входящие webhook-вызовы заголовком `X-Max-Bot-Api-Secret`.
+`bootstrap_yc.sh prod` запрашивает RegionCity API token, MAX bot token, MAX bot deep link base, admin JWT secret и MAX webhook secret и сохраняет в локальные файлы только Lockbox IDs/version IDs и runtime config. `deploy_all.sh prod` создаёт static website buckets и собирает admin/public frontend с URL созданного API Gateway. `register_max_webhook.sh prod set` получает токен и secret непосредственно из Lockbox и регистрирует события `message_created` и `bot_started`; значение `MAX_WEBHOOK_SECRET` защищает входящие webhook-вызовы заголовком `X-Max-Bot-Api-Secret`.
 
 Если инфраструктура и frontend уже развернуты, а создание администратора было пропущено или завершилось ошибкой, не запускайте bootstrap повторно. Создайте или обновите администратора отдельно:
 

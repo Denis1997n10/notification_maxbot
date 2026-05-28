@@ -59,8 +59,17 @@ fi
 public_origin="${PUBLIC_ORIGIN:-$default_public_origin}"
 admin_origin="${ADMIN_ORIGIN:-$default_admin_origin}"
 max_base="${MAX_API_BASE_URL:-https://platform-api.max.ru}"
+regioncity_map_objects_path="${REGIONCITY_MAP_OBJECTS_PATH:-/mapObjectManagement/mapObjects}"
+max_bot_deeplink_base="${MAX_BOT_DEEPLINK_BASE:-}"
+if [[ "$env" == "prod" && -z "${max_bot_deeplink_base//[[:space:]]/}" ]]; then
+  read -rp "Enter MAX bot deep link base (for example https://max.ru/bot_name): " max_bot_deeplink_base
+fi
+if [[ "$env" == "dev" && -z "${max_bot_deeplink_base//[[:space:]]/}" ]]; then
+  max_bot_deeplink_base="https://max.ru/notification_maxbot_dev"
+fi
 require_non_empty "PUBLIC_ORIGIN" "$public_origin"
 require_non_empty "ADMIN_ORIGIN" "$admin_origin"
+require_non_empty "MAX_BOT_DEEPLINK_BASE" "$max_bot_deeplink_base"
 
 if [[ "$env" == "dev" ]]; then
   function_use_mocks="${DEV_USE_MOCKS:-}"
@@ -124,6 +133,8 @@ admin_origin = "$admin_origin"
 public_site_url = "$public_origin"
 admin_site_url = "$admin_origin"
 max_api_base_url = "$max_base"
+max_bot_deeplink_base = "$max_bot_deeplink_base"
+regioncity_map_objects_path = "$regioncity_map_objects_path"
 regioncity_api_token_secret_id = "$REGIONCITY_SECRET_ID"
 regioncity_api_token_secret_version_id = "${REGIONCITY_SECRET_VERSION_ID:-}"
 max_bot_token_secret_id = "$MAX_BOT_SECRET_ID"

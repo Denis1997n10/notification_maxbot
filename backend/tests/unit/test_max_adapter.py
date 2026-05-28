@@ -87,6 +87,49 @@ def test_start_payload_parsed():
     assert parser.external_user_id(payload) == "42"
 
 
+def test_bot_started_payload_parsed():
+    parser = MaxWebhookParser()
+    payload = {"update_type": "bot_started", "user": {"id": 42}, "payload": "e_ABC123"}
+    assert parser.bot_start_payload(payload) == "e_ABC123"
+    assert parser.parse_start_public_code(payload) == "e_ABC123"
+
+
+def test_bot_started_payload_subscribes_by_public_code():
+    from composition.container import BotService
+    from domain.entities.models import Subject, User
+    from domain.value_objects.enums import ChannelType, SubjectType
+
+    class Users:
+        def get_or_create_channel_user(self, channel, external_user_id, display_name):
+            return User(user_id="u1", channel=ChannelType.MAX)
+
+    class Subjects:
+        def get_by_public_code(self, code):
+            assert code == "ABC123"
+            return Subject("s1", SubjectType.ENTRANCE, "Адрес 1")
+
+    class Subscriptions:
+        def get_active(self, user_id, subject_id):
+            return None
+
+    class Subscribe:
+        def __init__(self):
+            self.created = []
+
+        def execute(self, subscription):
+            self.created.append(subscription)
+
+    class ListSubscriptions:
+        def execute(self, user_id):
+            return []
+
+    subscribe = Subscribe()
+    service = BotService(Users(), Subjects(), Subscriptions(), subscribe, ListSubscriptions(), None)
+    result = service.handle_payload({"update_type": "bot_started", "user": {"id": 42}, "payload": "e_ABC123"})
+    assert "Готово" in result["message"]
+    assert subscribe.created[0].subject_id == "s1"
+
+
 def test_callback_payload_parsed():
     parser = MaxWebhookParser()
     assert parser.callback_payload({"callback": {"payload": "menu:addresses"}}) == "menu:addresses"

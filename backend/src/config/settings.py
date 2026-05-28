@@ -10,7 +10,9 @@ class AppSettings:
     ydb_endpoint: str
     ydb_database: str
     regioncity_base_url: str
+    regioncity_map_objects_path: str
     max_api_base_url: str
+    max_bot_deeplink_base: str
     public_site_url: str
     admin_site_url: str
     cache_ttl_minutes: int
@@ -26,7 +28,9 @@ def load_settings() -> AppSettings:
         ydb_endpoint=os.getenv("YDB_ENDPOINT", ""),
         ydb_database=os.getenv("YDB_DATABASE", ""),
         regioncity_base_url=os.getenv("REGIONCITY_BASE_URL", "https://api.mpoisk.ru/v6/api"),
+        regioncity_map_objects_path=os.getenv("REGIONCITY_MAP_OBJECTS_PATH", "/mapObjectManagement/mapObjects"),
         max_api_base_url=os.getenv("MAX_API_BASE_URL", "https://botapi.max.ru"),
+        max_bot_deeplink_base=os.getenv("MAX_BOT_DEEPLINK_BASE", ""),
         public_site_url=os.getenv("PUBLIC_SITE_URL", ""),
         admin_site_url=os.getenv("ADMIN_SITE_URL", ""),
         cache_ttl_minutes=int(os.getenv("CACHE_TTL_MINUTES", "10")),

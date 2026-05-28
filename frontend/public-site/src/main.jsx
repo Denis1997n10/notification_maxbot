@@ -1,6 +1,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Link, Route, Routes, useLocation, useParams } from 'react-router-dom'
+import QRCode from 'qrcode'
 import './styles.css'
 
 const API = import.meta.env.VITE_PUBLIC_API_BASE_URL || ''
@@ -9,21 +10,6 @@ async function apiGet(path) {
   const response = await fetch(`${API}${path}`)
   if (!response.ok) throw new Error('api')
   return response.json()
-}
-
-async function apiPost(path, body) {
-  const response = await fetch(`${API}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const error = new Error(data.error || 'api')
-    error.data = data
-    throw error
-  }
-  return data
 }
 
 function asItems(data) {
@@ -65,6 +51,31 @@ function SearchField({ id, label, value, options, disabled, placeholder, onChang
   )
 }
 
+function QrCodeImage({ value }) {
+  const [src, setSrc] = React.useState('')
+
+  React.useEffect(() => {
+    let active = true
+    if (!value) {
+      setSrc('')
+      return undefined
+    }
+    QRCode.toDataURL(value, { margin: 1, width: 180 })
+      .then((dataUrl) => {
+        if (active) setSrc(dataUrl)
+      })
+      .catch(() => {
+        if (active) setSrc('')
+      })
+    return () => {
+      active = false
+    }
+  }, [value])
+
+  if (!value || !src) return null
+  return <img className="qr-code" src={src} alt="QR-код для перехода в MAX" />
+}
+
 function AddressPicker() {
   const [cities, setCities] = React.useState([])
   const [districts, setDistricts] = React.useState([])
@@ -84,7 +95,6 @@ function AddressPicker() {
     entrance: null,
   })
   const [status, setStatus] = React.useState({ loading: true, error: '', message: '' })
-  const [copied, setCopied] = React.useState(false)
 
   React.useEffect(() => {
     apiGet('/api/v1/public/cities')
@@ -190,41 +200,6 @@ function AddressPicker() {
     }))
   }
 
-  async function subscribe() {
-    if (!selected.entrance?.public_code) return
-    const initData = window.WebApp?.initData || ''
-    if (!initData) {
-      setStatus({ loading: false, error: '', message: `Откройте MAX и отправьте боту: Подписаться ${selected.entrance.public_code}` })
-      return
-    }
-    setStatus({ loading: true, error: '', message: '' })
-    try {
-      const result = await apiPost('/api/v1/public/miniapp/subscriptions', {
-        public_code: selected.entrance.public_code,
-        init_data: initData,
-      })
-      const already = result.status === 'already_subscribed'
-      setStatus({
-        loading: false,
-        error: '',
-        message: already ? 'Вы уже подписаны на этот адрес.' : 'Готово. Подписка оформлена.',
-      })
-    } catch (error) {
-      const text =
-        error.data?.error === 'unauthorized'
-          ? 'Не удалось подтвердить MAX-сессию. Откройте выбор адреса из бота еще раз.'
-          : 'Не удалось оформить подписку. Попробуйте еще раз.'
-      setStatus({ loading: false, error: text, message: '' })
-    }
-  }
-
-  async function copyCommand() {
-    if (!selected.entrance?.public_code) return
-    const command = `Подписаться ${selected.entrance.public_code}`
-    await navigator.clipboard?.writeText(command)
-    setCopied(true)
-  }
-
   const address = [
     selected.cityText,
     selected.districtText,
@@ -289,13 +264,18 @@ function AddressPicker() {
         <div className="result">
           <span>Выбранный адрес</span>
           <strong>{address || 'Адрес пока не выбран'}</strong>
-          <button disabled={!selected.entrance || status.loading} onClick={subscribe}>
-            Подписаться
-          </button>
           {selected.entrance ? (
-            <button className="secondary" type="button" onClick={copyCommand}>
-              {copied ? 'Команда скопирована' : 'Скопировать команду для бота'}
-            </button>
+            <div className="address-actions">
+              <QrCodeImage value={selected.entrance.max_bot_url} />
+              <div className="button-row">
+                <a className={`link-button ${selected.entrance.max_bot_url ? '' : 'disabled'}`} href={selected.entrance.max_bot_url || undefined}>
+                  Перейти в MAX
+                </a>
+                <a className="link-button secondary-link" href={selected.entrance.public_url || `/e/${selected.entrance.public_code}`}>
+                  Открыть страницу адреса
+                </a>
+              </div>
+            </div>
           ) : null}
           {status.message ? <p className="success">{status.message}</p> : null}
           {status.error && cities.length > 0 ? <p className="error">{status.error}</p> : null}
@@ -346,7 +326,15 @@ function EntrancePage() {
         <p className="eyebrow">{d.district}</p>
         <h1>{d.house}</h1>
         <p>{d.address}</p>
-        <Link className="link-button" to="/?view=select">Выбрать другой адрес</Link>
+        <div className="button-row">
+          {d.max_bot_url ? <a className="link-button" href={d.max_bot_url}>Перейти в MAX</a> : null}
+          <Link className="link-button secondary-link" to="/?view=select">Выбрать другой адрес</Link>
+        </div>
+      </section>
+      <section className="picker-card qr-panel">
+        <h2>Подписка через MAX</h2>
+        <p className="muted">Отсканируйте QR-код или нажмите «Перейти в MAX». Бот получит команду с адресом автоматически.</p>
+        <QrCodeImage value={d.max_bot_url} />
       </section>
       <section className="picker-card">
         <h2>Последние события</h2>

@@ -5,6 +5,8 @@
 
 ## Frontend npm
 - react/react-dom/react-router-dom
+- qrcode (QR rendering for MAX deep links)
+- xlsx (admin Excel import/export)
 - vite/@vitejs/plugin-react
 
 ## Terraform

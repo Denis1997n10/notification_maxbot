@@ -450,6 +450,48 @@ paths:
       responses:
         '200':
           description: ok
+  /api/v1/admin/address-export:
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/admin/address-import/preview:
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/admin/address-import/apply:
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
+  /api/v1/admin/regioncity/map-objects/search:
+    get:
+      parameters:
+        - name: address
+          in: query
+          required: true
+          schema:
+            type: string
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: "${admin_api_function_id}"
+        service_account_id: "${gateway_service_account_id}"
+      responses:
+        '200':
+          description: ok
   /api/v1/admin/users:
     get:
       x-yc-apigateway-integration:
