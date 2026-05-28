@@ -70,7 +70,7 @@ function Login({ onAuthenticated }) {
       <label>Логин<input name='login' autoComplete='username' required /></label>
       <label>Пароль<input name='password' type='password' autoComplete='current-password' required /></label>
       {message && <p className='alert error' role='alert'>{message}</p>}
-      <button className='primary' disabled={busy}>{busy ? 'Входим...' : 'Войти'}</button>
+      <button type='submit' className='primary' disabled={busy}>{busy ? 'Входим...' : 'Войти'}</button>
     </form>
   </div>
 }
@@ -360,7 +360,7 @@ function Dashboard({ token, principal, onLogout }) {
   return <div className='app-shell'>
     <header className='topbar'>
       <div className='brand'><span className='brand-mark compact'>RN</span><div><strong>Resident Notifications</strong><small>Панель управления</small></div></div>
-      <div className='profile'><span className='role'>{isSuperAdmin ? 'Super admin' : 'District admin'}</span><button className='ghost' onClick={() => onLogout()}>Выйти</button></div>
+      <div className='profile'><span className='role'>{isSuperAdmin ? 'Super admin' : 'District admin'}</span><button type='button' className='ghost' onClick={() => onLogout()}>Выйти</button></div>
     </header>
 
     <main className='workspace'>
@@ -385,14 +385,14 @@ function Dashboard({ token, principal, onLogout }) {
           <div className='panel-title'><h2>Города</h2><span className='tag'>{isSuperAdmin ? 'управление' : 'только выбор'}</span></div>
           {loading ? <Empty>Загрузка...</Empty> : cities.length === 0 ? <Empty>{isSuperAdmin ? 'Создайте первый город.' : 'Доступных городов нет.'}</Empty> : <ul className='select-list'>
             {cities.map(item => <li key={item.id} className={item.id === cityId ? 'selected' : ''}>
-              <button className='select' onClick={() => setCityId(item.id)}>{item.name}</button>
-              {isSuperAdmin && <button className='danger-link' onClick={() => deactivate('cities', item.id, `город "${item.name}"`)} disabled={busy}>Отключить</button>}
+              <button type='button' className='select' onClick={() => setCityId(item.id)}>{item.name}</button>
+              {isSuperAdmin && <button type='button' className='danger-link' onClick={() => deactivate('cities', item.id, `город "${item.name}"`)} disabled={busy}>Отключить</button>}
             </li>)}
           </ul>}
           {isSuperAdmin && <form className='edit-form' onSubmit={createCity}>
             <h3>Новый город</h3>
             <input name='name' placeholder='Название города' required />
-            <button className='primary' disabled={busy}>Добавить город</button>
+            <button type='submit' className='primary' disabled={busy}>Добавить город</button>
           </form>}
         </section>
 
@@ -400,19 +400,19 @@ function Dashboard({ token, principal, onLogout }) {
           <div className='panel-title'><h2>Районы</h2><span className='tag'>{city?.name || 'выберите город'}</span></div>
           {!city ? <Empty>Сначала выберите город.</Empty> : districts.length === 0 ? <Empty>В городе нет доступных районов.</Empty> : <ul className='select-list'>
             {districts.map(item => <li key={item.id} className={item.id === districtId ? 'selected' : ''}>
-              <button className='select' onClick={() => setDistrictId(item.id)}>{item.name}</button>
-              {isSuperAdmin && <button className='danger-link' onClick={() => deactivate('districts', item.id, `район "${item.name}"`)} disabled={busy}>Отключить</button>}
+              <button type='button' className='select' onClick={() => setDistrictId(item.id)}>{item.name}</button>
+              {isSuperAdmin && <button type='button' className='danger-link' onClick={() => deactivate('districts', item.id, `район "${item.name}"`)} disabled={busy}>Отключить</button>}
             </li>)}
           </ul>}
           {isSuperAdmin && city && <form className='edit-form' onSubmit={createDistrict}>
             <h3>Новый район</h3>
             <input name='name' placeholder='Название района' required />
-            <button className='primary' disabled={busy}>Добавить район</button>
+            <button type='submit' className='primary' disabled={busy}>Добавить район</button>
           </form>}
           {isSuperAdmin && city && unassignedDistricts.length > 0 && <form className='edit-form compact-form' onSubmit={assignDistrict}>
             <h3>Привязать существующий район</h3>
             <select name='district_id' required>{unassignedDistricts.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-            <button className='secondary' disabled={busy}>Привязать к городу</button>
+            <button type='submit' className='secondary' disabled={busy}>Привязать к городу</button>
           </form>}
         </section>
 
@@ -420,14 +420,14 @@ function Dashboard({ token, principal, onLogout }) {
           <div className='panel-title'><h2>Улицы</h2><span className='tag'>{district?.name || 'выберите район'}</span></div>
           {!district ? <Empty>Сначала выберите район.</Empty> : streets.length === 0 ? <Empty>Улиц пока нет.</Empty> : <ul className='select-list'>
             {streets.map(item => <li key={item.id} className={item.id === streetId ? 'selected' : ''}>
-              <button className='select' onClick={() => setStreetId(item.id)}>{item.name}</button>
-              <button className='danger-link' onClick={() => deactivate('streets', item.id, `улицу "${item.name}"`)} disabled={busy}>Отключить</button>
+              <button type='button' className='select' onClick={() => setStreetId(item.id)}>{item.name}</button>
+              <button type='button' className='danger-link' onClick={() => deactivate('streets', item.id, `улицу "${item.name}"`)} disabled={busy}>Отключить</button>
             </li>)}
           </ul>}
           {district && <form className='edit-form' onSubmit={createStreet}>
             <h3>Новая улица</h3>
             <input name='name' placeholder='Название улицы' required />
-            <button className='primary' disabled={busy}>Добавить улицу</button>
+            <button type='submit' className='primary' disabled={busy}>Добавить улицу</button>
           </form>}
         </section>
 
@@ -435,14 +435,14 @@ function Dashboard({ token, principal, onLogout }) {
           <div className='panel-title'><h2>Дома и подъезды</h2><span className='tag'>{street?.name || 'выберите улицу'}</span></div>
           {!street ? <Empty>Сначала выберите улицу.</Empty> : houses.length === 0 ? <Empty>Домов пока нет.</Empty> : <ul className='select-list houses'>
             {houses.map(item => <li key={item.id} className={item.id === houseId ? 'selected' : ''}>
-              <button className='select' onClick={() => setHouseId(item.id)}><strong>Дом {item.house_number}{item.building ? ` к${item.building}` : ''}</strong></button>
-              <button className='danger-link' onClick={() => deactivate('houses', item.id, 'дом')} disabled={busy}>Отключить</button>
+              <button type='button' className='select' onClick={() => setHouseId(item.id)}><strong>Дом {item.house_number}{item.building ? ` к${item.building}` : ''}</strong></button>
+              <button type='button' className='danger-link' onClick={() => deactivate('houses', item.id, 'дом')} disabled={busy}>Отключить</button>
             </li>)}
           </ul>}
           {street && <form className='edit-form inline-form' onSubmit={createHouse}>
             <h3>Новый дом</h3>
             <div className='split small'><input name='house_number' placeholder='Дом' required /><input name='building' placeholder='Корпус' /></div>
-            <button className='primary' disabled={busy}>Добавить дом</button>
+            <button type='submit' className='primary' disabled={busy}>Добавить дом</button>
           </form>}
           {house && <div className='entrance-subsection'>
             <h3>Подъезды дома {house.house_number}</h3>
@@ -453,13 +453,13 @@ function Dashboard({ token, principal, onLogout }) {
                   <small>Код: {item.public_code}</small>
                   {item.public_url && <a href={item.public_url} target='_blank' rel='noreferrer'>Публичная страница</a>}
                 </div>
-                <button className='danger-link' onClick={() => deactivate('entrances', item.id, 'подъезд')} disabled={busy}>Отключить</button>
+                <button type='button' className='danger-link' onClick={() => deactivate('entrances', item.id, 'подъезд')} disabled={busy}>Отключить</button>
               </li>)}
             </ul>}
             <form className='edit-form inline-form' onSubmit={createEntrance}>
               <div className='split'><input name='entrance_number' placeholder='Подъезд' required /><input name='public_code' placeholder='Публичный код (авто)' /></div>
               <input name='regioncity_external_ref' placeholder='RegionCity mapObjectID (опционально)' />
-              <button className='primary' disabled={busy}>Добавить подъезд</button>
+              <button type='submit' className='primary' disabled={busy}>Добавить подъезд</button>
             </form>
           </div>}
         </section>
@@ -471,7 +471,7 @@ function Dashboard({ token, principal, onLogout }) {
           {residents.length === 0 ? <Empty>Пользователи появятся после взаимодействия с ботом.</Empty> : <ul className='select-list management-list'>
             {residents.map(item => <li key={item.id}>
               <div className='list-copy'><strong>{item.display_name || item.external_user_id}</strong><small>{item.external_user_id}</small></div>
-              <button className='danger-link' onClick={() => deactivateResident(item.id)} disabled={busy}>Отключить</button>
+              <button type='button' className='danger-link' onClick={() => deactivateResident(item.id)} disabled={busy}>Отключить</button>
             </li>)}
           </ul>}
         </section>
@@ -481,7 +481,7 @@ function Dashboard({ token, principal, onLogout }) {
           <ul className='select-list management-list'>
             {admins.map(item => <li key={item.id}>
               <div className='list-copy'><strong>{item.login}</strong><small>{item.role === 'super_admin' ? 'Super admin' : `${item.district_ids.length} район(а)`}</small></div>
-              {item.id !== principal.sub && <button className='danger-link' onClick={() => deactivateAdmin(item.id)} disabled={busy}>Отключить</button>}
+              {item.id !== principal.sub && <button type='button' className='danger-link' onClick={() => deactivateAdmin(item.id)} disabled={busy}>Отключить</button>}
             </li>)}
           </ul>
           <form className='edit-form' onSubmit={createAdmin}>
@@ -496,7 +496,7 @@ function Dashboard({ token, principal, onLogout }) {
                 <label className='checkbox' key={item.id}><input type='checkbox' name='district_ids' value={item.id} />{item.name}</label>
               )}
             </div>}
-            <button className='primary' disabled={busy}>Создать администратора</button>
+            <button type='submit' className='primary' disabled={busy}>Создать администратора</button>
           </form>
         </section>
       </div>}
@@ -509,7 +509,7 @@ function Dashboard({ token, principal, onLogout }) {
         </div>
         <form className='notification-form' onSubmit={sendTestNotification}>
           <input value={testUserId} onChange={event => setTestUserId(event.target.value)} placeholder='MAX user ID' required />
-          <button className='primary' disabled={busy}>Отправить тест</button>
+          <button type='submit' className='primary' disabled={busy}>Отправить тест</button>
         </form>
       </section>}
     </main>

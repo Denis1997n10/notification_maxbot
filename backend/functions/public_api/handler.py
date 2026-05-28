@@ -9,6 +9,17 @@ from config.version import get_version_info
 logger = logging.getLogger(__name__)
 
 
+def _path_param(params: dict[str, Any], path: str, key: str, marker: str) -> str:
+    if params.get(key):
+        return str(params[key])
+    parts = path.strip("/").split("/")
+    try:
+        index = parts.index(marker)
+    except ValueError:
+        return ""
+    return parts[index + 1] if len(parts) > index + 1 else ""
+
+
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     path = event.get("path", "")
     method = event.get("httpMethod", "GET")
@@ -23,21 +34,21 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         return api_response(200, {"status": "ok"})
     container = build_container()
     if method == "GET" and path.startswith("/api/v1/public/entrances/"):
-        return api_response(200, container.public_service.get_entrance_page(params.get("publicCode")))
+        return api_response(200, container.public_service.get_entrance_page(_path_param(params, path, "publicCode", "entrances")))
     if method == "GET" and path == "/api/v1/public/cities":
         return api_response(200, container.public_service.list_cities())
     if method == "GET" and path.startswith("/api/v1/public/cities/") and path.endswith("/districts"):
-        return api_response(200, container.public_service.list_city_districts(params.get("cityId")))
+        return api_response(200, container.public_service.list_city_districts(_path_param(params, path, "cityId", "cities")))
     if method == "GET" and path == "/api/v1/public/districts":
         return api_response(200, container.public_service.list_districts())
     if method == "GET" and path.startswith("/api/v1/public/districts/") and path.endswith("/streets"):
-        return api_response(200, container.public_service.list_streets(params.get("districtId")))
+        return api_response(200, container.public_service.list_streets(_path_param(params, path, "districtId", "districts")))
     if method == "GET" and path.startswith("/api/v1/public/districts/") and path.endswith("/houses"):
-        return api_response(200, container.public_service.list_houses(params.get("districtId")))
+        return api_response(200, container.public_service.list_houses(_path_param(params, path, "districtId", "districts")))
     if method == "GET" and path.startswith("/api/v1/public/streets/") and path.endswith("/houses"):
-        return api_response(200, container.public_service.list_street_houses(params.get("streetId")))
+        return api_response(200, container.public_service.list_street_houses(_path_param(params, path, "streetId", "streets")))
     if method == "GET" and path.startswith("/api/v1/public/houses/") and path.endswith("/entrances"):
-        return api_response(200, container.public_service.list_entrances(params.get("houseId")))
+        return api_response(200, container.public_service.list_entrances(_path_param(params, path, "houseId", "houses")))
     if method == "POST" and path == "/api/v1/public/miniapp/subscriptions":
         result = container.public_service.subscribe_from_mini_app(event.get("body"))
         statuses = {"unauthorized": 401, "not_found": 404, "configuration_error": 500}
