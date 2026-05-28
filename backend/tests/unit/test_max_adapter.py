@@ -75,6 +75,12 @@ def test_start_payload_parsed():
     assert parser.external_user_id(payload) == "42"
 
 
+def test_callback_payload_parsed():
+    parser = MaxWebhookParser()
+    assert parser.callback_payload({"callback": {"payload": "menu:addresses"}}) == "menu:addresses"
+    assert parser.callback_payload({"callback": {"button": {"payload": "address:open:s1"}}}) == "address:open:s1"
+
+
 def test_services_placeholder_rendered_when_disabled():
     renderer = MaxMessageRenderer(FakeTemplateProvider())
     payload = renderer.render_services_placeholder("u1")

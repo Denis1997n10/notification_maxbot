@@ -91,6 +91,7 @@ def test_start_without_code_shows_menu():
 
     assert "Как начать" in result["message"]
     assert "Мои адреса" in str(result["keyboard"])
+    assert "Подписаться" not in str(result["keyboard"])
 
 
 def test_start_menu_can_open_address_picker():
@@ -113,14 +114,43 @@ def test_list_and_unsubscribe_by_number():
     removed = service.handle_payload({"message": {"sender": {"user_id": "42"}, "body": {"text": "Отписаться 1"}}})
 
     assert "1. Сочи" in listed["message"]
-    assert "Отключил" in removed["message"]
+    assert "Вы отписались" in removed["message"]
     assert "Отписаться 1" not in str(removed["keyboard"])
 
 
-def test_disable_all_is_direct_command():
+def test_disable_all_is_not_available():
     service = make_service()
     service.handle_payload({"message": {"sender": {"user_id": "42"}, "body": {"text": "/start e_code1"}}})
 
     result = service.handle_payload({"message": {"sender": {"user_id": "42"}, "body": {"text": "Отключить все"}}})
 
-    assert "Отключил подписки: 1" in result["message"]
+    assert "Массовая отписка недоступна" in result["message"]
+    assert service.subscriptions.list_active_by_user("u1")
+
+
+def test_callback_addresses_menu_lists_address_buttons():
+    service = make_service()
+    service.handle_payload({"message": {"sender": {"user_id": "42"}, "body": {"text": "/start e_code1"}}})
+
+    result = service.handle_payload({"callback": {"user_id": "42", "payload": "menu:addresses"}})
+
+    assert "Ваши адреса" in result["message"]
+    assert "address:open:" in str(result["keyboard"])
+    assert "Отключить все" not in str(result["keyboard"])
+    assert "Подписаться" not in str(result["keyboard"])
+
+
+def test_callback_open_address_and_confirm_unsubscribe():
+    service = make_service()
+    service.handle_payload({"message": {"sender": {"user_id": "42"}, "body": {"text": "/start e_code1"}}})
+    subscription_id = service.subscriptions.list_active_by_user("u1")[0].subscription_id
+
+    opened = service.handle_payload({"callback": {"user_id": "42", "payload": f"address:open:{subscription_id}"}})
+    confirm = service.handle_payload({"callback": {"user_id": "42", "payload": f"address:unsubscribe:{subscription_id}"}})
+    removed = service.handle_payload({"callback": {"user_id": "42", "payload": f"address:unsubscribe_confirm:{subscription_id}"}})
+
+    assert "Адрес:" in opened["message"]
+    assert f"address:unsubscribe:{subscription_id}" in str(opened["keyboard"])
+    assert "Подтвердите отписку" in confirm["message"]
+    assert "Вы отписались" in removed["message"]
+    assert not service.subscriptions.list_active_by_user("u1")

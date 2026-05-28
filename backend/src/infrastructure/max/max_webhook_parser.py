@@ -43,10 +43,27 @@ class MaxWebhookParser:
         return None
 
     def parse_action(self, payload: dict) -> str | None:
-        callback = (payload.get("callback") or {}).get("data")
+        callback = self.callback_payload(payload)
         if callback:
             return callback
         text = self.message_text(payload)
         if text in {"my_subscriptions", "add_address", "remove_subscription", "disable_all", "services", "help"}:
             return text
+        return None
+
+    def callback_payload(self, payload: dict) -> str | None:
+        callback = payload.get("callback") or {}
+        button = callback.get("button") or {}
+        candidates = (
+            callback.get("payload"),
+            callback.get("data"),
+            button.get("payload"),
+            button.get("data"),
+            payload.get("callback_payload"),
+            payload.get("payload"),
+            payload.get("data"),
+        )
+        for candidate in candidates:
+            if candidate:
+                return str(candidate).strip()
         return None

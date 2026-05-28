@@ -582,8 +582,12 @@ class BotService:
 
     def handle_payload(self, payload: dict):
         text = self.webhook_parser.message_text(payload)
+        action = self.webhook_parser.callback_payload(payload)
         ext_user = self.webhook_parser.external_user_id(payload) or "unknown"
         user = self.users.get_or_create_channel_user("max", ext_user, self.webhook_parser.display_name(payload))
+
+        if action:
+            return self._handle_action(user.user_id, action)
 
         if text.startswith("/start"):
             arg = text.replace("/start", "", 1).strip()
@@ -608,10 +612,10 @@ class BotService:
             return self._unsubscribe_help(user.user_id)
 
         if command in {"отключить все", "отписаться от всего", "удалить все", "disable_all"}:
-            n = self.disable_uc.execute(user.user_id)
-            if n == 0:
-                return {"message": "Активных подписок пока нет.", "keyboard": self._main_keyboard()}
-            return {"message": f"Готово. Отключил подписки: {n}.", "keyboard": self._main_keyboard()}
+            return {
+                "message": "Массовая отписка недоступна, чтобы случайно не удалить все адреса. Откройте «Мои адреса» и выберите конкретный адрес.",
+                "keyboard": self._subscription_keyboard(user.user_id),
+            }
 
         if command in {"услуги", "сервисы", "services"}:
             return {
@@ -631,18 +635,48 @@ class BotService:
             "keyboard": self._main_keyboard(),
         }
 
+    def _handle_action(self, user_id: str, action: str) -> dict:
+        if action == "menu:main":
+            return {"message": "Выберите действие:", "keyboard": self._main_keyboard()}
+        if action == "menu:addresses":
+            return self._list_subscriptions(user_id)
+        if action == "menu:choose_address":
+            return self._subscribe_help()
+        if action == "menu:services":
+            return {
+                "message": "Раздел услуг пока зарезервирован. Сейчас бот отправляет уведомления по выбранным адресам.",
+                "keyboard": self._main_keyboard(),
+            }
+        if action == "menu:help":
+            return self._help()
+        if action.startswith("address:open:"):
+            return self._open_subscription(user_id, action.removeprefix("address:open:"))
+        if action.startswith("address:unsubscribe:"):
+            return self._confirm_unsubscribe(user_id, action.removeprefix("address:unsubscribe:"))
+        if action.startswith("address:unsubscribe_confirm:"):
+            return self._unsubscribe_subscription(user_id, action.removeprefix("address:unsubscribe_confirm:"))
+        return {"message": "Не понял действие. Вернитесь в меню и попробуйте снова.", "keyboard": self._main_keyboard()}
+
     @staticmethod
     def _normalize(text: str) -> str:
         return " ".join(text.strip().lower().split())
 
+    @staticmethod
+    def _callback_button(text: str, payload: str, intent: str = "default") -> dict:
+        return {"type": "callback", "text": text, "payload": payload, "intent": intent}
+
+    @staticmethod
+    def _link_button(text: str, url: str) -> dict:
+        return {"type": "link", "text": text, "url": url}
+
     def _main_keyboard(self) -> list[list[dict]]:
         rows: list[list[dict]] = []
         if self.address_picker_url:
-            rows.append([{"type": "link", "text": "Выбрать адрес", "url": self.address_picker_url}])
+            rows.append([self._link_button("Выбрать адрес", self.address_picker_url)])
         else:
-            rows.append([{"type": "message", "text": "Подписаться"}])
-        rows.append([{"type": "message", "text": "Мои адреса"}, {"type": "message", "text": "Подписаться"}])
-        rows.append([{"type": "message", "text": "Услуги"}, {"type": "message", "text": "Помощь"}])
+            rows.append([self._callback_button("Выбрать адрес", "menu:choose_address")])
+        rows.append([self._callback_button("Мои адреса", "menu:addresses")])
+        rows.append([self._callback_button("Услуги", "menu:services"), self._callback_button("Помощь", "menu:help")])
         return rows
 
     def _welcome(self) -> dict:
@@ -663,11 +697,9 @@ class BotService:
         return {
             "message": (
                 "Что можно сделать:\n"
-                "• «Мои адреса» — посмотреть активные подписки.\n"
-                "• «Выбрать адрес» — найти поддерживаемый адрес в списке.\n"
-                "• «Подписаться» — узнать, как добавить адрес через QR.\n"
-                "• «Отписаться 1» — отключить адрес по номеру из списка.\n"
-                "• «Отключить все» — выключить все уведомления.\n"
+                "• «Выбрать адрес» — найти поддерживаемый адрес в списке и подписаться.\n"
+                "• «Мои адреса» — посмотреть активные подписки и выбрать адрес для управления.\n"
+                "• «Отписаться 1» — текстовая команда для отписки по номеру из списка, если кнопки недоступны.\n"
                 "• «Услуги» — будущие сервисы платформы."
             ),
             "keyboard": self._main_keyboard(),
@@ -726,22 +758,32 @@ class BotService:
         items = self._active_subjects(user_id)
         if not items:
             return {
-                "message": "У вас пока нет адресов. Чтобы добавить адрес, откройте QR-код подъезда и нажмите «Подписаться в MAX».",
+                "message": "У вас пока нет адресов. Нажмите «Выбрать адрес» или откройте QR-код подъезда и нажмите «Подписаться в MAX».",
                 "keyboard": self._main_keyboard(),
             }
         lines = ["Ваши адреса:"]
         for number, (_, subject) in enumerate(items, start=1):
             lines.append(f"{number}. {subject.title}")
         lines.append("")
-        lines.append("Чтобы отключить один адрес, нажмите кнопку ниже или напишите «Отписаться 1».")
+        lines.append("Выберите адрес для управления.")
         return {"message": "\n".join(lines), "keyboard": self._subscription_keyboard(user_id)}
 
     def _subscription_keyboard(self, user_id: str) -> list[list[dict]]:
         items = self._active_subjects(user_id)
-        buttons = [[{"type": "message", "text": f"Отписаться {number}"}] for number, _ in enumerate(items, start=1)]
-        buttons.append([{"type": "message", "text": "Мои адреса"}, {"type": "message", "text": "Отключить все"}])
-        buttons.append([{"type": "message", "text": "Подписаться"}, {"type": "message", "text": "Помощь"}])
+        buttons = [
+            [self._callback_button(f"{number}. {self._short_title(subject.title)}", f"address:open:{subscription.subscription_id}")]
+            for number, (subscription, subject) in enumerate(items, start=1)
+        ]
+        if self.address_picker_url:
+            buttons.append([self._link_button("Выбрать адрес", self.address_picker_url)])
+        else:
+            buttons.append([self._callback_button("Выбрать адрес", "menu:choose_address")])
+        buttons.append([self._callback_button("Помощь", "menu:help"), self._callback_button("Назад", "menu:main")])
         return buttons
+
+    @staticmethod
+    def _short_title(title: str, limit: int = 54) -> str:
+        return title if len(title) <= limit else f"{title[: limit - 1].rstrip()}…"
 
     def _unsubscribe_target(self, text: str) -> str | None:
         stripped = text.strip()
@@ -775,7 +817,64 @@ class BotService:
                 "keyboard": self._subscription_keyboard(user_id),
             }
         self.subscriptions.deactivate(user_id, subject.subject_id)
-        return {"message": f"Отключил уведомления по адресу:\n{subject.title}", "keyboard": self._subscription_keyboard(user_id)}
+        return {"message": f"Вы отписались от адреса:\n{subject.title}", "keyboard": self._subscription_keyboard(user_id)}
+
+    def _subscription_item(self, user_id: str, subscription_id: str) -> tuple[Subscription, Any] | None:
+        for subscription, subject in self._active_subjects(user_id):
+            if subscription.subscription_id == subscription_id:
+                return subscription, subject
+        return None
+
+    def _open_subscription(self, user_id: str, subscription_id: str) -> dict:
+        item = self._subscription_item(user_id, subscription_id)
+        if not item:
+            return {
+                "message": "Этот адрес больше не найден в ваших подписках. Обновите список адресов.",
+                "keyboard": self._subscription_keyboard(user_id),
+            }
+        subscription, subject = item
+        return {
+            "message": (
+                "Адрес:\n"
+                f"{subject.title}\n\n"
+                "Вы можете отписаться от этого адреса. После отписки уведомления по нему приходить не будут."
+            ),
+            "keyboard": self._address_keyboard(subscription.subscription_id),
+        }
+
+    def _address_keyboard(self, subscription_id: str) -> list[list[dict]]:
+        return [
+            [self._callback_button("Отписаться от адреса", f"address:unsubscribe:{subscription_id}", "negative")],
+            [self._callback_button("Назад к моим адресам", "menu:addresses")],
+            [self._callback_button("Помощь", "menu:help")],
+        ]
+
+    def _confirm_unsubscribe(self, user_id: str, subscription_id: str) -> dict:
+        item = self._subscription_item(user_id, subscription_id)
+        if not item:
+            return {
+                "message": "Этот адрес больше не найден в ваших подписках. Обновите список адресов.",
+                "keyboard": self._subscription_keyboard(user_id),
+            }
+        _, subject = item
+        return {
+            "message": f"Подтвердите отписку от адреса:\n{subject.title}",
+            "keyboard": [
+                [self._callback_button("Да, отписаться", f"address:unsubscribe_confirm:{subscription_id}", "negative")],
+                [self._callback_button("Отмена", f"address:open:{subscription_id}")],
+            ],
+        }
+
+    def _unsubscribe_subscription(self, user_id: str, subscription_id: str) -> dict:
+        item = self._subscription_item(user_id, subscription_id)
+        if not item:
+            return {
+                "message": "Этот адрес уже не активен в ваших подписках.",
+                "keyboard": self._subscription_keyboard(user_id),
+            }
+        _, subject = item
+        self.subscriptions.deactivate(user_id, subject.subject_id)
+        return {"message": f"Вы отписались от адреса:\n{subject.title}", "keyboard": self._subscription_keyboard(user_id)}
 
 
 class _Mock:
