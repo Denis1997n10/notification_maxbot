@@ -12,12 +12,16 @@ class MaxWebhookParser:
         sender = message.get("sender") or {}
         user = payload.get("user") or {}
         callback = payload.get("callback") or {}
+        callback_user = callback.get("user") or {}
         return str(
             sender.get("user_id")
             or sender.get("id")
             or user.get("user_id")
             or user.get("id")
             or callback.get("user_id")
+            or callback.get("userId")
+            or callback_user.get("user_id")
+            or callback_user.get("id")
             or payload.get("user_id")
             or payload.get("chat_id")
             or ""
@@ -27,12 +31,17 @@ class MaxWebhookParser:
         message = payload.get("message") or {}
         sender = message.get("sender") or {}
         user = payload.get("user") or {}
+        callback = payload.get("callback") or {}
+        callback_user = callback.get("user") or {}
         return str(
             sender.get("name")
             or sender.get("display_name")
             or user.get("name")
             or user.get("display_name")
             or user.get("username")
+            or callback_user.get("name")
+            or callback_user.get("display_name")
+            or callback_user.get("username")
             or ""
         )
 
@@ -57,8 +66,10 @@ class MaxWebhookParser:
         candidates = (
             callback.get("payload"),
             callback.get("data"),
+            callback.get("callback_data"),
             button.get("payload"),
             button.get("data"),
+            button.get("callback_data"),
             payload.get("callback_payload"),
             payload.get("payload"),
             payload.get("data"),

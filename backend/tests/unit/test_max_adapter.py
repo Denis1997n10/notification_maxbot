@@ -79,6 +79,10 @@ def test_callback_payload_parsed():
     parser = MaxWebhookParser()
     assert parser.callback_payload({"callback": {"payload": "menu:addresses"}}) == "menu:addresses"
     assert parser.callback_payload({"callback": {"button": {"payload": "address:open:s1"}}}) == "address:open:s1"
+    payload = {"callback": {"user": {"id": 42, "username": "resident"}, "button": {"callback_data": "menu:help"}}}
+    assert parser.callback_payload(payload) == "menu:help"
+    assert parser.external_user_id(payload) == "42"
+    assert parser.display_name(payload) == "resident"
 
 
 def test_services_placeholder_rendered_when_disabled():

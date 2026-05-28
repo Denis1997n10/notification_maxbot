@@ -51,7 +51,7 @@ case "$ACTION" in
     }
     echo "Setting MAX webhook subscription to: $WEBHOOK_URL"
     payload="$(jq -cn --arg url "$WEBHOOK_URL" --arg secret "$MAX_WEBHOOK_SECRET" \
-      '{url:$url,update_types:["message_created","bot_started"],secret:$secret}')"
+      '{url:$url,update_types:["message_created","message_callback","bot_started"],secret:$secret}')"
     curl --fail-with-body -sS -X POST "$API_BASE" \
       -H "Authorization: ${MAX_BOT_TOKEN}" \
       -H "Content-Type: application/json" \
