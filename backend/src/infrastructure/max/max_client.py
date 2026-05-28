@@ -23,6 +23,12 @@ class MaxClient:
             body["attachments"] = [{"type": "inline_keyboard", "payload": {"buttons": keyboard}}]
         await self._request("/messages", body, params={"user_id": user_id})
 
+    async def answer_callback(self, callback_id: str, text: str, keyboard: list[list[dict]] | None = None) -> None:
+        message: dict = {"text": text}
+        if keyboard:
+            message["attachments"] = [{"type": "inline_keyboard", "payload": {"buttons": keyboard}}]
+        await self._request("/answers", {"message": message}, params={"callback_id": callback_id})
+
     async def send_with_image(self, user_id: str, text: str, image_bytes: bytes | None) -> None:
         # Attachment delivery remains disabled until a confirmed image source and MAX upload flow exist.
         await self.send_text(user_id, text)

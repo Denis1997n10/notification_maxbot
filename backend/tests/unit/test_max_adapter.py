@@ -18,6 +18,7 @@ class FakeMaxClient:
         self.fail_text = fail_text
         self.sent_text = []
         self.sent_img = []
+        self.answered = []
 
     async def send_text(self, chat_id, text, keyboard=None):
         if self.fail_text:
@@ -29,6 +30,9 @@ class FakeMaxClient:
             from infrastructure.max.errors import MaxImageError
             raise MaxImageError("img error")
         self.sent_img.append((chat_id, text, image_bytes))
+
+    async def answer_callback(self, callback_id, text, keyboard=None):
+        self.answered.append((callback_id, text, keyboard))
 
 
 def test_render_cleaning_completed_message():
@@ -58,6 +62,14 @@ def test_send_text_with_keyboard():
     assert client.sent_text == [("u1", "B", keyboard)]
 
 
+def test_answer_callback_with_keyboard():
+    client = FakeMaxClient()
+    channel = MaxNotificationChannel(client)
+    keyboard = [[{"type": "callback", "text": "Назад", "payload": "menu:main"}]]
+    channel.answer_callback("cb1", "B", keyboard=keyboard)
+    assert client.answered == [("cb1", "B", keyboard)]
+
+
 def test_image_failure_still_sends_text():
     client = FakeMaxClient(fail_image=True)
     channel = MaxNotificationChannel(client)
@@ -79,6 +91,7 @@ def test_callback_payload_parsed():
     parser = MaxWebhookParser()
     assert parser.callback_payload({"callback": {"payload": "menu:addresses"}}) == "menu:addresses"
     assert parser.callback_payload({"callback": {"button": {"payload": "address:open:s1"}}}) == "address:open:s1"
+    assert parser.callback_id({"callback": {"callback_id": "cb1"}}) == "cb1"
     payload = {"callback": {"user": {"id": 42, "username": "resident"}, "button": {"callback_data": "menu:help"}}}
     assert parser.callback_payload(payload) == "menu:help"
     assert parser.external_user_id(payload) == "42"

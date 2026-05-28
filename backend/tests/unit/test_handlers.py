@@ -60,6 +60,16 @@ class DummyPolling:
 
 
 class DummySender:
+    def __init__(self):
+        self.sent = []
+        self.answered = []
+
+    def send(self, payload):
+        self.sent.append(payload)
+
+    def answer_callback(self, callback_id, text, keyboard=None):
+        self.answered.append((callback_id, text, keyboard))
+
     def send_batch(self, event): return {"sent_count": 1, "failed_count": 0}
 
 
@@ -89,6 +99,87 @@ def test_bot_webhook_routes(monkeypatch):
     resp = handler({"body": json.dumps({"text": "/start AB12"})}, None)
     assert resp["statusCode"] == 200
     assert json.loads(resp["body"])["public_code"] == "AB12"
+
+
+def test_bot_webhook_answers_callback(monkeypatch):
+    from composition.container import AppContainer
+    from functions.bot_webhook.handler import handler
+
+    sender = DummySender()
+
+    class Bot:
+        def handle_payload(self, payload):
+            return {"message": f"action:{payload['callback']['payload']}", "keyboard": [[{"type": "callback", "text": "Назад", "payload": "menu:main"}]]}
+
+    def build():
+        return AppContainer(
+            bot_service=Bot(),
+            public_service=DummyPublicService(),
+            admin_service=DummyAdminService(),
+            polling_use_case=DummyPolling(),
+            notification_service=DummySender(),
+            bot_reply_channel=sender,
+        )
+
+    monkeypatch.setattr("functions.bot_webhook.handler.build_container", build)
+    resp = handler(
+        {
+            "body": json.dumps(
+                {
+                    "callback": {
+                        "callback_id": "cb1",
+                        "user": {"id": "u1"},
+                        "payload": "menu:addresses",
+                    }
+                }
+            )
+        },
+        None,
+    )
+    assert resp["statusCode"] == 200
+    assert sender.answered == [
+        ("cb1", "action:menu:addresses", [[{"type": "callback", "text": "Назад", "payload": "menu:main"}]])
+    ]
+    assert sender.sent == []
+
+
+def test_bot_webhook_processes_update_batch(monkeypatch):
+    from composition.container import AppContainer
+    from functions.bot_webhook.handler import handler
+
+    sender = DummySender()
+
+    class Bot:
+        def handle_payload(self, payload):
+            return {"message": payload["callback"]["payload"]}
+
+    def build():
+        return AppContainer(
+            bot_service=Bot(),
+            public_service=DummyPublicService(),
+            admin_service=DummyAdminService(),
+            polling_use_case=DummyPolling(),
+            notification_service=DummySender(),
+            bot_reply_channel=sender,
+        )
+
+    monkeypatch.setattr("functions.bot_webhook.handler.build_container", build)
+    resp = handler(
+        {
+            "body": json.dumps(
+                {
+                    "updates": [
+                        {"callback": {"callback_id": "cb1", "user": {"id": "u1"}, "payload": "menu:help"}},
+                        {"callback": {"callback_id": "cb2", "user": {"id": "u1"}, "payload": "menu:services"}},
+                    ]
+                }
+            )
+        },
+        None,
+    )
+    assert resp["statusCode"] == 200
+    assert json.loads(resp["body"]) == {"items": [{"message": "menu:help"}, {"message": "menu:services"}]}
+    assert sender.answered == [("cb1", "menu:help", None), ("cb2", "menu:services", None)]
 
 
 def test_public_api_routes(monkeypatch):

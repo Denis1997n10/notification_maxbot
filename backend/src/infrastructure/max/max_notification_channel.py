@@ -23,3 +23,6 @@ class MaxNotificationChannel(NotificationChannel):
             except MaxImageError:
                 pass
         asyncio.run(self._client.send_text(payload.user_id, text, keyboard=keyboard))
+
+    def answer_callback(self, callback_id: str, text: str, keyboard: list[list[dict]] | None = None) -> None:
+        asyncio.run(self._client.answer_callback(callback_id, text, keyboard=keyboard))

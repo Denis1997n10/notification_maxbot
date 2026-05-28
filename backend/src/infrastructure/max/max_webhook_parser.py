@@ -13,6 +13,8 @@ class MaxWebhookParser:
         user = payload.get("user") or {}
         callback = payload.get("callback") or {}
         callback_user = callback.get("user") or {}
+        callback_message = callback.get("message") or {}
+        callback_sender = callback_message.get("sender") or {}
         return str(
             sender.get("user_id")
             or sender.get("id")
@@ -22,6 +24,10 @@ class MaxWebhookParser:
             or callback.get("userId")
             or callback_user.get("user_id")
             or callback_user.get("id")
+            or callback_sender.get("user_id")
+            or callback_sender.get("id")
+            or callback.get("chat_id")
+            or callback.get("chatId")
             or payload.get("user_id")
             or payload.get("chat_id")
             or ""
@@ -33,6 +39,8 @@ class MaxWebhookParser:
         user = payload.get("user") or {}
         callback = payload.get("callback") or {}
         callback_user = callback.get("user") or {}
+        callback_message = callback.get("message") or {}
+        callback_sender = callback_message.get("sender") or {}
         return str(
             sender.get("name")
             or sender.get("display_name")
@@ -42,6 +50,9 @@ class MaxWebhookParser:
             or callback_user.get("name")
             or callback_user.get("display_name")
             or callback_user.get("username")
+            or callback_sender.get("name")
+            or callback_sender.get("display_name")
+            or callback_sender.get("username")
             or ""
         )
 
@@ -73,6 +84,20 @@ class MaxWebhookParser:
             payload.get("callback_payload"),
             payload.get("payload"),
             payload.get("data"),
+        )
+        for candidate in candidates:
+            if candidate:
+                return str(candidate).strip()
+        return None
+
+    def callback_id(self, payload: dict) -> str | None:
+        callback = payload.get("callback") or {}
+        candidates = (
+            callback.get("callback_id"),
+            callback.get("callbackId"),
+            callback.get("id"),
+            payload.get("callback_id"),
+            payload.get("callbackId"),
         )
         for candidate in candidates:
             if candidate:
