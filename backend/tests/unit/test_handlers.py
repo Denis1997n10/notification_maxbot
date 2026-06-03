@@ -351,6 +351,18 @@ def test_regioncity_polling_handler(monkeypatch):
     assert body["fetched_count"] == 1
 
 
+def test_regioncity_polling_accepts_loose_yc_payload():
+    from functions.regioncity_polling.handler import _event_dict
+
+    payload = _event_dict("{date_from:2026-05-20T10:25:06Z,date_to:2026-06-03T10:25:06Z,notify:false}")
+
+    assert payload == {
+        "date_from": "2026-05-20T10:25:06Z",
+        "date_to": "2026-06-03T10:25:06Z",
+        "notify": False,
+    }
+
+
 def test_notification_sender_handler(monkeypatch):
     _patch_container(monkeypatch)
     from functions.notification_sender.handler import handler

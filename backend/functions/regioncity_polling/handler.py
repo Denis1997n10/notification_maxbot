@@ -43,5 +43,23 @@ def _event_dict(event: Any) -> dict[str, Any]:
     if isinstance(event, dict):
         return event
     if isinstance(event, str) and event.strip():
-        return json.loads(event)
+        try:
+            return json.loads(event)
+        except json.JSONDecodeError:
+            return _loose_event_dict(event)
     return {}
+
+
+def _loose_event_dict(value: str) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for part in value.strip().strip("{}").split(","):
+        if ":" not in part:
+            continue
+        key, raw = part.split(":", 1)
+        normalized_key = key.strip().strip('"')
+        normalized_value = raw.strip().strip('"')
+        if normalized_key == "notify":
+            result[normalized_key] = _parse_bool(normalized_value)
+        else:
+            result[normalized_key] = normalized_value
+    return result
