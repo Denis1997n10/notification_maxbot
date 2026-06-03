@@ -245,14 +245,17 @@ button:disabled {
   gap: 8px;
 }
 
-.event-images a {
+.event-image-button {
   display: block;
   width: 92px;
   height: 92px;
+  min-height: 0;
+  padding: 0;
   overflow: hidden;
   border: 1px solid #dfe8e4;
   border-radius: 14px;
   background: #f8fbfa;
+  cursor: zoom-in;
 }
 
 .event-images img {
@@ -261,9 +264,59 @@ button:disabled {
   object-fit: cover;
 }
 
+.event-image-button:focus-visible {
+  outline: 3px solid rgba(11, 122, 99, 0.35);
+  outline-offset: 3px;
+}
+
 .event-no-images {
   display: block;
   color: #8ca0ad;
+}
+
+.image-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(7, 25, 40, 0.76);
+}
+
+.image-modal-card {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  width: min(100%, 980px);
+  max-height: calc(100vh - 48px);
+  padding: 16px;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
+}
+
+.image-modal-card img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 150px);
+  margin: 0 auto;
+  border-radius: 16px;
+  object-fit: contain;
+}
+
+.image-modal-card p {
+  margin: 0;
+  color: #344b59;
+  font-weight: 800;
+}
+
+.image-modal-close {
+  justify-self: end;
+  min-height: 40px;
+  border: 1px solid #d7e1dd;
+  background: #fff;
+  color: #0b7a63;
 }
 
 @media (max-width: 720px) {

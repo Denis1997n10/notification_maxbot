@@ -288,6 +288,7 @@ function AddressPicker() {
 function EntrancePage() {
   const { publicCode } = useParams()
   const [state, setState] = React.useState({ loading: true, error: '', data: null })
+  const [previewImage, setPreviewImage] = React.useState(null)
 
   const load = React.useCallback(async () => {
     setState({ loading: true, error: '', data: null })
@@ -306,6 +307,15 @@ function EntrancePage() {
   React.useEffect(() => {
     load()
   }, [load])
+
+  React.useEffect(() => {
+    if (!previewImage) return undefined
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setPreviewImage(null)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [previewImage])
 
   if (state.loading) return <AppShell><p aria-live="polite">Загрузка...</p></AppShell>
   if (state.error === 'unavailable') return <AppShell><p>Страница подъезда недоступна.</p></AppShell>
@@ -347,9 +357,15 @@ function EntrancePage() {
                 {event.images?.length ? (
                   <div className="event-images">
                     {event.images.map((image, imageIndex) => (
-                      <a key={image.url || imageIndex} href={image.url} target="_blank" rel="noreferrer">
+                      <button
+                        key={image.url || imageIndex}
+                        type="button"
+                        className="event-image-button"
+                        onClick={() => setPreviewImage(image)}
+                        aria-label={`Открыть фото: ${image.label || 'Фото события'}`}
+                      >
                         <img src={image.url} alt={image.label || 'Фото события'} loading="lazy" />
-                      </a>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -363,6 +379,17 @@ function EntrancePage() {
           <p className="muted">Событий пока нет.</p>
         )}
       </section>
+      {previewImage ? (
+        <div className="image-modal" role="dialog" aria-modal="true" aria-label={previewImage.label || 'Фото события'} onClick={() => setPreviewImage(null)}>
+          <div className="image-modal-card" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="image-modal-close" onClick={() => setPreviewImage(null)} aria-label="Закрыть фото">
+              Закрыть
+            </button>
+            <img src={previewImage.url} alt={previewImage.label || 'Фото события'} />
+            {previewImage.label ? <p>{previewImage.label}</p> : null}
+          </div>
+        </div>
+      ) : null}
     </AppShell>
   )
 }
