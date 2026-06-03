@@ -1,14 +1,21 @@
 from __future__ import annotations
 from datetime import UTC, datetime
 from domain.entities.models import NotificationPayload, TaskEvent
-from domain.ports.interfaces import NotificationChannelRegistry, ProcessedEventRepository, TemplateProvider
+from domain.ports.interfaces import NotificationChannelRegistry, ProcessedEventRepository, TemplateProvider, UserRepository
 
 
 class NotificationService:
-    def __init__(self, processed_repo: ProcessedEventRepository, channel_registry: NotificationChannelRegistry, template_provider: TemplateProvider) -> None:
+    def __init__(
+        self,
+        processed_repo: ProcessedEventRepository,
+        channel_registry: NotificationChannelRegistry,
+        template_provider: TemplateProvider,
+        user_repo: UserRepository | None = None,
+    ) -> None:
         self.processed_repo = processed_repo
         self.channel_registry = channel_registry
         self.template_provider = template_provider
+        self.user_repo = user_repo
 
     def notify_users(self, event: TaskEvent, user_ids: list[str], channel: str = "max") -> int:
         if self.processed_repo.is_processed(event.source.value, event.external_id, event.event_type.value):
@@ -16,17 +23,31 @@ class NotificationService:
         self.processed_repo.mark_processed(event.source.value, event.external_id, event.event_type.value, datetime.now(UTC))
         sent = 0
         for user_id in user_ids:
+            recipient_id = self._recipient_id(user_id, channel)
+            if not recipient_id:
+                continue
             title, body = self.template_provider.render(event.event_type.value, channel, {"subject_title": event.metadata.get("subject_title", "подъезд")})
             payload_metadata = {}
             if event.metadata.get("image_bytes"):
                 payload_metadata["image_bytes"] = event.metadata["image_bytes"]
-            payload = NotificationPayload(user_id=user_id, channel=channel, title=title, body=body, metadata=payload_metadata)
+            payload = NotificationPayload(user_id=recipient_id, channel=channel, title=title, body=body, metadata=payload_metadata)
             try:
                 self.channel_registry.get(channel).send(payload)
                 sent += 1
             except Exception:
                 continue
         return sent
+
+    def _recipient_id(self, user_id: str, channel: str) -> str | None:
+        if not self.user_repo:
+            return user_id
+        user = self.user_repo.get_by_id(user_id)
+        if not user or not user.is_active or not user.notifications_enabled:
+            return None
+        user_channel = getattr(user.channel, "value", user.channel)
+        if str(user_channel) != str(channel):
+            return None
+        return user.channel_user_id or user.user_id
 
 
 class FeatureFlagService:

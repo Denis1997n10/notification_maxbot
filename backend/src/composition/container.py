@@ -1188,7 +1188,7 @@ def build_container() -> AppContainer:
     secret = YandexLockboxSecretProvider(settings.env)
     max_channel = MaxNotificationChannel(MaxClient(secret, settings.max_api_base_url))
     regioncity_client = RegionCityClient(secret, settings.regioncity_base_url)
-    notifier = NotificationService(processed, _Registry(max_channel), CodeTemplateProvider())
+    notifier = NotificationService(processed, _Registry(max_channel), CodeTemplateProvider(), users)
     regioncity_provider = RegionCityTaskProvider(regioncity_client, subjects, RegionCityMapper())
 
     return AppContainer(

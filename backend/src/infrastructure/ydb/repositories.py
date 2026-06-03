@@ -34,7 +34,7 @@ class YdbUserRepository(UserRepository):
         if not rows:
             return None
         r = rows[0]
-        return User(user_id=r["id"], channel=r["channel"], is_active=r["is_active"])
+        return User(user_id=r["id"], channel=r["channel"], channel_user_id=r.get("external_user_id"), is_active=r["is_active"])
 
     def save(self, user: User) -> None:
         self.session.execute(
@@ -45,7 +45,7 @@ class YdbUserRepository(UserRepository):
             {
                 "$id": user.user_id,
                 "$channel": str(user.channel),
-                "$external_user_id": user.user_id,
+                "$external_user_id": user.channel_user_id or user.user_id,
                 "$display_name": "",
                 "$is_active": user.is_active,
                 "$created_at": _now(),
@@ -61,13 +61,13 @@ class YdbUserRepository(UserRepository):
         if not rows:
             return None
         r = rows[0]
-        return User(user_id=r["id"], channel=r["channel"], is_active=r["is_active"])
+        return User(user_id=r["id"], channel=r["channel"], channel_user_id=r.get("external_user_id"), is_active=r["is_active"])
 
     def get_or_create_channel_user(self, channel: str, external_user_id: str, display_name: str = "") -> User:
         existing = self.find_by_channel_user(channel, external_user_id)
         if existing:
             return existing
-        user = User(user_id=str(uuid4()), channel=channel)
+        user = User(user_id=str(uuid4()), channel=channel, channel_user_id=external_user_id)
         self.session.execute(
             """
             UPSERT INTO users (id, channel, external_user_id, display_name, is_active, created_at, updated_at)

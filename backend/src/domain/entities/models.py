@@ -10,6 +10,7 @@ from domain.value_objects.enums import AdminRole, ChannelType, EventType, Source
 class User:
     user_id: str
     channel: ChannelType = ChannelType.MAX
+    channel_user_id: str | None = None
     notifications_enabled: bool = True
     is_active: bool = True
 

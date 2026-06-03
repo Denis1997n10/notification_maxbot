@@ -5,8 +5,8 @@ from application.errors.exceptions import DuplicateSubscriptionError, SubjectIna
 from application.services import NotificationService
 from application.templates.code_template_provider import CodeTemplateProvider
 from application.use_cases.use_cases import GetPublicSubjectPageUseCase, PollExternalEventsUseCase, SubscribeUserToSubjectUseCase
-from domain.entities.models import Subscription, Subject, TaskEvent
-from domain.value_objects.enums import EventType, Source, SubjectType
+from domain.entities.models import Subscription, Subject, TaskEvent, User
+from domain.value_objects.enums import ChannelType, EventType, Source, SubjectType
 
 class SubRepo:
     def __init__(self): self.items=[]
@@ -50,6 +50,11 @@ class Provider:
     def __init__(self,events): self.events=events
     async def fetch_events(self,date_from,date_to): return self.events
 
+class UserRepo:
+    def __init__(self,items): self.items=items
+    def get_by_id(self,user_id): return self.items.get(user_id)
+    def save(self,user): self.items[user.user_id]=user
+
 def test_subscription_limit():
     sub=SubRepo(); subj=SubjectRepo(); uc=SubscribeUserToSubjectUseCase(subj,sub)
     for i in range(20): sub.save(Subscription(str(i),'u1',f's{i}'))
@@ -78,6 +83,17 @@ def test_processed_event_skip_and_failure_continue():
     sent=svc.notify_users(event,['u1','u2','u3'])
     assert sent==2
     assert svc.notify_users(event,['u1'])==0
+
+def test_notification_service_resolves_channel_user_id():
+    prepo=PRepo(); ch=Channel()
+    users=UserRepo({'u1': User('u1', ChannelType.MAX, channel_user_id='max-user-1')})
+    svc=NotificationService(prepo,Registry(ch),CodeTemplateProvider(),users)
+    event=TaskEvent('e1','s1',Source.REGIONCITY,EventType.CLEANING_COMPLETED,datetime.now(UTC),{'subject_title':'A'})
+
+    sent=svc.notify_users(event,['u1'])
+
+    assert sent==1
+    assert ch.sent[0].user_id=='max-user-1'
 
 def test_polling_saves_events_and_can_suppress_backfill_notifications():
     event=TaskEvent('e2','s1',Source.REGIONCITY,EventType.CLEANING_COMPLETED,datetime.now(UTC),{'subject_title':'A'})

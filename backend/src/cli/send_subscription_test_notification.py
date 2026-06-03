@@ -15,7 +15,7 @@ from infrastructure.lockbox.secret_provider import YandexLockboxSecretProvider
 from infrastructure.max.max_client import MaxClient
 from infrastructure.max.max_notification_channel import MaxNotificationChannel
 from infrastructure.ydb.client import YdbClient, YdbConfig
-from infrastructure.ydb.repositories import YdbProcessedEventRepository, YdbSubjectRepository, YdbSubscriptionRepository
+from infrastructure.ydb.repositories import YdbProcessedEventRepository, YdbSubjectRepository, YdbSubscriptionRepository, YdbUserRepository
 
 
 class _Registry:
@@ -40,12 +40,14 @@ def main() -> int:
     settings = load_settings()
     session = YdbClient(YdbConfig(settings.ydb_endpoint, settings.ydb_database)).session()
     subjects = YdbSubjectRepository(session)
+    users = YdbUserRepository(session)
     subscriptions = YdbSubscriptionRepository(session)
     processed = YdbProcessedEventRepository(session)
     notifier = NotificationService(
         processed,
         _Registry(MaxNotificationChannel(MaxClient(YandexLockboxSecretProvider(settings.env), settings.max_api_base_url))),
         CodeTemplateProvider(),
+        users,
     )
 
     active = subscriptions.list_active()
@@ -53,10 +55,16 @@ def main() -> int:
         active = [item for item in active if item.user_id == args.user_id]
     if not active:
         raise SystemExit("No active subscription found")
-    subscription = active[0]
-    subject = subjects.get_by_id(subscription.subject_id)
-    if not subject:
-        raise SystemExit("Subscription subject is missing")
+    subscription = None
+    subject = None
+    for item in active:
+        item_subject = subjects.get_by_id(item.subject_id)
+        if item_subject:
+            subscription = item
+            subject = item_subject
+            break
+    if not subscription or not subject:
+        raise SystemExit("No active subscription with an active subject found")
 
     metadata = {"subject_title": subject.title}
     if args.with_image:
