@@ -10,10 +10,11 @@ from domain.value_objects.enums import ChannelType, EventType, Source, SubjectTy
 
 
 class RegionCityMapper:
-    def __init__(self) -> None:
+    def __init__(self, media_base_url: str = "https://cds1.mpoisk.ru/cds1/d") -> None:
         self._logger = logging.getLogger(__name__)
+        self._media_base_url = media_base_url.rstrip("/")
 
-    def map_task_to_event(self, task: dict, subject: Subject | None, task_type_id: int = 51) -> TaskEvent | None:
+    def map_task_to_event(self, task: dict, subject: Subject | None, forms: list[dict] | None = None, task_type_id: int = 51) -> TaskEvent | None:
         if task.get("taskTypeID") != task_type_id:
             return None
         if task.get("status") != 3:
@@ -32,7 +33,7 @@ class RegionCityMapper:
             event_type=EventType.CLEANING_COMPLETED,
             occurred_at=occurred_at,
             metadata=metadata,
-            images=self._extract_images(task),
+            images=self._extract_images(task, forms or []),
         )
 
     def to_resident_payload(self, event: TaskEvent) -> NotificationPayload:
@@ -73,7 +74,7 @@ class RegionCityMapper:
             md["custom_fields"].pop("worker-id")
         return md
 
-    def _extract_images(self, task: dict) -> list[TaskImage]:
+    def _extract_images(self, task: dict, forms: list[dict] | None = None) -> list[TaskImage]:
         images: list[TaskImage] = []
         seen: set[str] = set()
 
@@ -91,7 +92,29 @@ class RegionCityMapper:
             name = str(item.get("name") or "")
             if self._is_image_key(name):
                 self._collect_image_urls(item.get("value"), name, add)
+        for form in forms or []:
+            for item in form.get("items") or []:
+                if str(item.get("type") or "").lower() != "picture":
+                    continue
+                label = str(item.get("name") or "").strip() or None
+                for value in self._picture_values(item):
+                    add(self._media_url(value), label)
         return images
+
+    def _picture_values(self, item: dict) -> list[str]:
+        values: list[str] = []
+        raw_value = item.get("value")
+        if raw_value:
+            values.append(str(raw_value).strip())
+        raw_values = item.get("values")
+        if isinstance(raw_values, list):
+            values.extend(str(value).strip() for value in raw_values if value)
+        return [value for value in values if value]
+
+    def _media_url(self, value: str) -> str:
+        if value.startswith(("http://", "https://")):
+            return value
+        return f"{self._media_base_url}/{value}"
 
     def _collect_image_urls(self, value: Any, label: str | None, add) -> None:
         if isinstance(value, str):

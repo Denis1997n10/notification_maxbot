@@ -104,6 +104,16 @@ variable "regioncity_map_objects_path" {
   default = "/mapObjectManagement/mapObjects"
 }
 
+variable "regioncity_forms_path" {
+  type    = string
+  default = "/formManagement/forms"
+}
+
+variable "regioncity_media_base_url" {
+  type    = string
+  default = "https://cds1.mpoisk.ru/cds1/d"
+}
+
 variable "max_api_base_url" {
   type    = string
   default = "https://platform-api.max.ru"

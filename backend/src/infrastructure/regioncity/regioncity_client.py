@@ -39,6 +39,20 @@ class RegionCityClient:
     async def get_task_detail(self, task_id: str) -> dict:
         return await self._request(f"/taskManagement/tasks/{task_id}")
 
+    async def list_forms(self, task_ids: list[str], path: str = "/formManagement/forms") -> list[dict]:
+        ids = [str(task_id).strip() for task_id in task_ids if str(task_id).strip()]
+        if not ids:
+            return []
+        data = await self._request(path, params={"taskIDs": ",".join(ids)})
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for key in ("items", "data", "result", "forms"):
+                value = data.get(key)
+                if isinstance(value, list):
+                    return value
+        return []
+
     async def list_map_objects(self, path: str = "/mapObjectManagement/mapObjects", address: str | None = None) -> list[dict]:
         params = {"address": address} if address else None
         data = await self._request(path, params=params)

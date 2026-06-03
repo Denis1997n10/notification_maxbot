@@ -25,9 +25,18 @@ class HttpImageLoader(ImageLoader):
         response = httpx.get(url, timeout=self._timeout_seconds, follow_redirects=True)
         response.raise_for_status()
         content_type = response.headers.get("content-type", "").lower()
-        if not content_type.startswith("image/"):
-            return None
         content = response.content
         if not content or len(content) > self._max_bytes:
             return None
+        if not content_type.startswith("image/") and not self._looks_like_image(content):
+            return None
         return content
+
+    def _looks_like_image(self, content: bytes) -> bool:
+        return (
+            content.startswith(b"\x89PNG\r\n\x1a\n")
+            or content.startswith(b"\xff\xd8\xff")
+            or content.startswith(b"GIF87a")
+            or content.startswith(b"GIF89a")
+            or (len(content) > 12 and content[0:4] == b"RIFF" and content[8:12] == b"WEBP")
+        )

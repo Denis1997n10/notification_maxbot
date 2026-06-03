@@ -1191,7 +1191,12 @@ def build_container() -> AppContainer:
     max_channel = MaxNotificationChannel(MaxClient(secret, settings.max_api_base_url))
     regioncity_client = RegionCityClient(secret, settings.regioncity_base_url)
     notifier = NotificationService(processed, _Registry(max_channel), CodeTemplateProvider(), users, HttpImageLoader())
-    regioncity_provider = RegionCityTaskProvider(regioncity_client, subjects, RegionCityMapper())
+    regioncity_provider = RegionCityTaskProvider(
+        regioncity_client,
+        subjects,
+        RegionCityMapper(settings.regioncity_media_base_url),
+        forms_path=settings.regioncity_forms_path,
+    )
 
     return AppContainer(
         bot_service=BotService(

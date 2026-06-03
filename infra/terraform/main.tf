@@ -89,6 +89,8 @@ locals {
     ENV                         = var.environment
     REGIONCITY_BASE_URL         = var.regioncity_base_url
     REGIONCITY_MAP_OBJECTS_PATH = var.regioncity_map_objects_path
+    REGIONCITY_FORMS_PATH       = var.regioncity_forms_path
+    REGIONCITY_MEDIA_BASE_URL   = var.regioncity_media_base_url
     MAX_API_BASE_URL            = var.max_api_base_url
     MAX_BOT_DEEPLINK_BASE       = var.max_bot_deeplink_base
     PUBLIC_SITE_URL             = var.public_site_url

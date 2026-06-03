@@ -7,11 +7,17 @@ from infrastructure.regioncity.regioncity_task_provider import RegionCityTaskPro
 
 
 class FakeClient:
-    def __init__(self, tasks):
+    def __init__(self, tasks, forms=None):
         self.tasks = tasks
+        self.forms = forms or []
+        self.form_lookups = []
 
     async def list_tasks(self, date_from, date_to):
         return self.tasks
+
+    async def list_forms(self, task_ids, path="/formManagement/forms"):
+        self.form_lookups.append((task_ids, path))
+        return [form for form in self.forms if str(form.get("taskID")) in set(task_ids)]
 
 
 class FakeSubjectRepo:
@@ -75,15 +81,39 @@ def test_mapper_extracts_image_urls_from_confirmed_payload_fields():
     ]
 
 
+def test_mapper_extracts_picture_items_from_regioncity_forms():
+    mapper = RegionCityMapper()
+    subject = Subject("s1", SubjectType.ENTRANCE, "E", True, "m1")
+    forms = [
+        {
+            "taskID": 1,
+            "items": [
+                {"name": "Фото входной группы", "value": "eKCkTgd", "type": "Picture"},
+                {"name": "Пустое фото", "value": None, "type": "Picture"},
+                {"name": "Комментарий", "value": "abc", "type": "Text"},
+            ],
+        }
+    ]
+
+    event = mapper.map_task_to_event(make_task(), subject, forms)
+
+    assert [(image.url, image.label) for image in event.images] == [
+        ("https://cds1.mpoisk.ru/cds1/d/eKCkTgd", "Фото входной группы")
+    ]
+
+
 def test_provider_uses_map_object_lookup_and_skips_missing_subject():
     import asyncio
     tasks = [make_task(task_id="1", map_object_id="found"), make_task(task_id="2", map_object_id="missing")]
+    client = FakeClient(tasks, [{"taskID": "1", "items": [{"name": "Фото", "value": "img1", "type": "Picture"}]}])
     repo = FakeSubjectRepo({"found": Subject("s1", SubjectType.ENTRANCE, "E", True, "found")})
-    provider = RegionCityTaskProvider(FakeClient(tasks), repo, RegionCityMapper())
+    provider = RegionCityTaskProvider(client, repo, RegionCityMapper())
     events = asyncio.run(provider.fetch_events(datetime.now(UTC), datetime.now(UTC)))
     assert len(events) == 1
     assert events[0].external_id == "1"
+    assert events[0].images[0].url == "https://cds1.mpoisk.ru/cds1/d/img1"
     assert repo.lookups == ["found", "missing"]
+    assert client.form_lookups == [(["1", "2"], "/formManagement/forms")]
 
 
 def test_regioncity_map_objects_response_maps_candidates():

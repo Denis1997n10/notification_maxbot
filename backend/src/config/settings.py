@@ -11,6 +11,8 @@ class AppSettings:
     ydb_database: str
     regioncity_base_url: str
     regioncity_map_objects_path: str
+    regioncity_forms_path: str
+    regioncity_media_base_url: str
     max_api_base_url: str
     max_bot_deeplink_base: str
     public_site_url: str
@@ -29,6 +31,8 @@ def load_settings() -> AppSettings:
         ydb_database=os.getenv("YDB_DATABASE", ""),
         regioncity_base_url=os.getenv("REGIONCITY_BASE_URL", "https://api.mpoisk.ru/v6/api"),
         regioncity_map_objects_path=os.getenv("REGIONCITY_MAP_OBJECTS_PATH", "/mapObjectManagement/mapObjects"),
+        regioncity_forms_path=os.getenv("REGIONCITY_FORMS_PATH", "/formManagement/forms"),
+        regioncity_media_base_url=os.getenv("REGIONCITY_MEDIA_BASE_URL", "https://cds1.mpoisk.ru/cds1/d"),
         max_api_base_url=os.getenv("MAX_API_BASE_URL", "https://botapi.max.ru"),
         max_bot_deeplink_base=os.getenv("MAX_BOT_DEEPLINK_BASE", ""),
         public_site_url=os.getenv("PUBLIC_SITE_URL", ""),
