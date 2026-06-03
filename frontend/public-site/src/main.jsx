@@ -5,6 +5,13 @@ import QRCode from 'qrcode'
 import './styles.css'
 
 const API = import.meta.env.VITE_PUBLIC_API_BASE_URL || ''
+const EVENT_DATE_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
 
 async function apiGet(path) {
   const response = await fetch(`${API}${path}`)
@@ -14,6 +21,13 @@ async function apiGet(path) {
 
 function asItems(data) {
   return Array.isArray(data) ? data : data?.items || []
+}
+
+function formatEventDate(value) {
+  if (!value) return 'Дата не указана'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Дата не указана'
+  return EVENT_DATE_FORMATTER.format(date)
 }
 
 function AppShell({ children }) {
@@ -371,7 +385,7 @@ function EntrancePage() {
                 ) : (
                   <small className="event-no-images">Фото по этому событию не переданы источником.</small>
                 )}
-                <small>{event.occurred_at}</small>
+                <small className="event-date">{formatEventDate(event.occurred_at)}</small>
               </li>
             ))}
           </ul>

@@ -274,6 +274,12 @@ button:disabled {
   color: #8ca0ad;
 }
 
+.event-date {
+  display: block;
+  color: #607280;
+  font-weight: 700;
+}
+
 .image-modal {
   position: fixed;
   inset: 0;
