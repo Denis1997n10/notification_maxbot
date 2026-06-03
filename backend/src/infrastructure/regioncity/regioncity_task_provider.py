@@ -30,11 +30,10 @@ class RegionCityTaskProvider(ExternalTaskProvider):
 
     async def fetch_events(self, date_from: datetime, date_to: datetime) -> list[TaskEvent]:
         tasks = await self._client.list_tasks(date_from=date_from, date_to=date_to)
-        forms_by_task_id = await self._forms_by_task_id(tasks)
+        candidates = self._candidate_tasks(tasks)
+        forms_by_task_id = await self._forms_by_task_id([task for task, _ in candidates])
         events: list[TaskEvent] = []
-        for task in tasks:
-            external_ref = str(task.get("mapObjectID") or "")
-            subject = self._subject_repository.find_by_external_ref(external_ref)
+        for task, subject in candidates:
             event = self._mapper.map_task_to_event(task, subject, forms_by_task_id.get(str(task.get("taskID"))))
             if event:
                 events.append(event)
@@ -44,16 +43,31 @@ class RegionCityTaskProvider(ExternalTaskProvider):
         now = datetime.now(UTC)
         date_from = now - timedelta(days=self._latest_period_days)
         tasks = await self._client.list_tasks(date_from=date_from, date_to=now)
-        forms_by_task_id = await self._forms_by_task_id(tasks)
+        subject_tasks = [
+            task
+            for task in tasks
+            if task.get("status") == 3 and str(task.get("mapObjectID") or "") == (subject.external_ref or "")
+        ]
+        forms_by_task_id = await self._forms_by_task_id(subject_tasks)
         events: list[TaskEvent] = []
-        for task in tasks:
-            if str(task.get("mapObjectID") or "") != (subject.external_ref or ""):
-                continue
+        for task in subject_tasks:
             mapped = self._mapper.map_task_to_event(task, subject, forms_by_task_id.get(str(task.get("taskID"))))
             if mapped:
                 events.append(mapped)
         events.sort(key=lambda x: x.occurred_at, reverse=True)
         return events[:limit]
+
+    def _candidate_tasks(self, tasks: list[dict]) -> list[tuple[dict, Subject]]:
+        candidates: list[tuple[dict, Subject]] = []
+        for task in tasks:
+            if task.get("status") != 3:
+                continue
+            external_ref = str(task.get("mapObjectID") or "")
+            subject = self._subject_repository.find_by_external_ref(external_ref)
+            if subject is None or not subject.is_active:
+                continue
+            candidates.append((task, subject))
+        return candidates
 
     async def _forms_by_task_id(self, tasks: list[dict]) -> dict[str, list[dict]]:
         task_ids = [

@@ -122,7 +122,7 @@ def test_provider_uses_map_object_lookup_and_skips_missing_subject():
     assert events[0].external_id == "1"
     assert events[0].images[0].url == "https://cds1.mpoisk.ru/cds1/d/img1"
     assert repo.lookups == ["found", "missing"]
-    assert client.form_lookups == [(["1", "2"], "/formManagement/forms")]
+    assert client.form_lookups == [(["1"], "/formManagement/forms")]
 
 
 def test_provider_falls_back_to_single_form_requests_when_batch_fails():
