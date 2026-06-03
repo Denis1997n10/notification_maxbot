@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+    event = _event_dict(event)
     settings = load_settings()
     container = build_container()
 
@@ -35,3 +37,11 @@ def _parse_bool(value: object) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _event_dict(event: Any) -> dict[str, Any]:
+    if isinstance(event, dict):
+        return event
+    if isinstance(event, str) and event.strip():
+        return json.loads(event)
+    return {}
