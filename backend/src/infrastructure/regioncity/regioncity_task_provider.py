@@ -67,10 +67,22 @@ class RegionCityTaskProvider(ExternalTaskProvider):
             try:
                 forms = await self._client.list_forms(chunk, self._forms_path)
             except RegionCityRequestError:
-                self._logger.warning("RegionCity forms request failed", extra={"task_count": len(chunk)})
-                continue
-            for form in forms:
-                task_id = str(form.get("taskID") or "")
-                if task_id:
-                    result.setdefault(task_id, []).append(form)
+                self._logger.warning("RegionCity forms batch request failed", extra={"task_count": len(chunk)})
+                forms = await self._fallback_single_forms(chunk)
+            self._add_forms(result, forms)
         return result
+
+    async def _fallback_single_forms(self, task_ids: list[str]) -> list[dict]:
+        forms: list[dict] = []
+        for task_id in task_ids:
+            try:
+                forms.extend(await self._client.list_forms([task_id], self._forms_path))
+            except RegionCityRequestError:
+                self._logger.warning("RegionCity forms request failed", extra={"task_id": task_id})
+        return forms
+
+    def _add_forms(self, result: dict[str, list[dict]], forms: list[dict]) -> None:
+        for form in forms:
+            task_id = str(form.get("taskID") or "")
+            if task_id:
+                result.setdefault(task_id, []).append(form)

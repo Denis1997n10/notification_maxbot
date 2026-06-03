@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from domain.entities.models import Subject
 from domain.value_objects.enums import SubjectType
+from infrastructure.regioncity.errors import RegionCityRequestError
 from infrastructure.regioncity.regioncity_mapper import RegionCityMapper
 from infrastructure.regioncity.regioncity_task_provider import RegionCityTaskProvider
 
@@ -18,6 +19,14 @@ class FakeClient:
     async def list_forms(self, task_ids, path="/formManagement/forms"):
         self.form_lookups.append((task_ids, path))
         return [form for form in self.forms if str(form.get("taskID")) in set(task_ids)]
+
+
+class BatchFailingFormsClient(FakeClient):
+    async def list_forms(self, task_ids, path="/formManagement/forms"):
+        if len(task_ids) > 1:
+            self.form_lookups.append((task_ids, path))
+            raise RegionCityRequestError("batch unsupported")
+        return await super().list_forms(task_ids, path)
 
 
 class FakeSubjectRepo:
@@ -114,6 +123,19 @@ def test_provider_uses_map_object_lookup_and_skips_missing_subject():
     assert events[0].images[0].url == "https://cds1.mpoisk.ru/cds1/d/img1"
     assert repo.lookups == ["found", "missing"]
     assert client.form_lookups == [(["1", "2"], "/formManagement/forms")]
+
+
+def test_provider_falls_back_to_single_form_requests_when_batch_fails():
+    import asyncio
+    tasks = [make_task(task_id="1", map_object_id="found"), make_task(task_id="2", map_object_id="found")]
+    client = BatchFailingFormsClient(tasks, [{"taskID": "2", "items": [{"name": "Фото", "value": "img2", "type": "Picture"}]}])
+    repo = FakeSubjectRepo({"found": Subject("s1", SubjectType.ENTRANCE, "E", True, "found")})
+    provider = RegionCityTaskProvider(client, repo, RegionCityMapper())
+
+    events = asyncio.run(provider.fetch_events(datetime.now(UTC), datetime.now(UTC)))
+
+    assert [item[0] for item in client.form_lookups] == [["1", "2"], ["1"], ["2"]]
+    assert [len(event.images) for event in events] == [0, 1]
 
 
 def test_regioncity_map_objects_response_maps_candidates():
