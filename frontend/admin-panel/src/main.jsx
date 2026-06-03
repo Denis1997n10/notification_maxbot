@@ -49,7 +49,7 @@ async function jsonRequest(path, options = {}) {
   return data
 }
 
-function Login({ onAuthenticated }) {
+function AuthView({ onAuthenticated }) {
   const [message, setMessage] = React.useState('')
   const [busy, setBusy] = React.useState(false)
 
@@ -75,7 +75,7 @@ function Login({ onAuthenticated }) {
   return <div className='login-shell'>
     <div className='login-brand'>
       <span className='brand-mark'>RN</span>
-      <p className='eyebrow'>Resident Notifications</p>
+      <p className='eyebrow'>Уведомления жителей</p>
       <h1>Управление уведомлениями жителей</h1>
       <p className='muted'>Справочник объектов, публичные страницы и проверка канала MAX в одной панели.</p>
     </div>
@@ -499,7 +499,7 @@ function Dashboard({ token, principal, onLogout }) {
 
   return <div className='app-shell'>
     <header className='topbar'>
-      <div className='brand'><span className='brand-mark compact'>RN</span><div><strong>Resident Notifications</strong><small>Панель управления</small></div></div>
+      <div className='brand'><span className='brand-mark compact'>RN</span><div><strong>Уведомления жителей</strong><small>Панель управления</small></div></div>
       <div className='profile'><span className='role'>{isSuperAdmin ? 'Super admin' : 'District admin'}</span><button type='button' className='ghost' onClick={() => onLogout()}>Выйти</button></div>
     </header>
 
@@ -769,7 +769,7 @@ function App() {
       .finally(() => setValidating(false))
   }, [token])
 
-  if (!token) return <><Login onAuthenticated={authenticated} />{sessionError && <p className='session-error'>{sessionError}</p>}</>
+  if (!token) return <><AuthView onAuthenticated={authenticated} />{sessionError && <p className='session-error'>{sessionError}</p>}</>
   if (validating || !principal) return <div className='loading-page'>Проверяем сессию...</div>
   return <Dashboard token={token} principal={principal} onLogout={logout} />
 }

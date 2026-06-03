@@ -36,7 +36,7 @@ function AppShell({ children }) {
       <header className="brand">
         <div className="logo">RN</div>
         <div>
-          <strong>Resident Notifications</strong>
+          <strong>Уведомления жителей</strong>
           <span>Уведомления по объектам справочника</span>
         </div>
       </header>
