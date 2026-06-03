@@ -342,7 +342,7 @@ resource "yandex_function_trigger" "polling_timer" {
   name  = "regioncity-polling-${local.env}"
 
   timer {
-    cron_expression = "0 */20 * * * *"
+    cron_expression = "*/20 * * * ? *"
   }
 
   function {
