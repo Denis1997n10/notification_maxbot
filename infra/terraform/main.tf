@@ -134,6 +134,12 @@ resource "yandex_resourcemanager_folder_iam_member" "gw_invoker" {
   member    = "serviceAccount:${yandex_iam_service_account.gateway.id}"
 }
 
+resource "yandex_resourcemanager_folder_iam_member" "fn_invoker" {
+  folder_id = var.folder_id
+  role      = "serverless.functions.invoker"
+  member    = "serviceAccount:${yandex_iam_service_account.functions.id}"
+}
+
 resource "yandex_ydb_database_serverless" "db" {
   name        = "${var.ydb_name}-${local.env}"
   folder_id   = var.folder_id

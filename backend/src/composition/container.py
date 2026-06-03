@@ -26,6 +26,7 @@ from domain.entities.models import Subscription, TaskEvent
 from domain.ports.interfaces import SecretProvider
 from domain.value_objects.enums import EventType, Source
 from infrastructure.lockbox.secret_provider import YandexLockboxSecretProvider
+from infrastructure.http.image_loader import HttpImageLoader
 from infrastructure.max.max_client import MaxClient
 from infrastructure.max.max_notification_channel import MaxNotificationChannel
 from infrastructure.max.max_webapp_validator import MaxWebAppValidator
@@ -177,6 +178,7 @@ class PublicService:
             "title": "Уборка завершена" if event.event_type == EventType.CLEANING_COMPLETED else event.event_type.value,
             "description": event.metadata.get("address") or event.metadata.get("title") or "Событие по адресу",
             "occurred_at": event.occurred_at.isoformat(),
+            "images": [{"url": image.url, "label": image.label} for image in event.images],
         }
 
 
@@ -1188,7 +1190,7 @@ def build_container() -> AppContainer:
     secret = YandexLockboxSecretProvider(settings.env)
     max_channel = MaxNotificationChannel(MaxClient(secret, settings.max_api_base_url))
     regioncity_client = RegionCityClient(secret, settings.regioncity_base_url)
-    notifier = NotificationService(processed, _Registry(max_channel), CodeTemplateProvider(), users)
+    notifier = NotificationService(processed, _Registry(max_channel), CodeTemplateProvider(), users, HttpImageLoader())
     regioncity_provider = RegionCityTaskProvider(regioncity_client, subjects, RegionCityMapper())
 
     return AppContainer(

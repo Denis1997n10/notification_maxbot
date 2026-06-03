@@ -36,24 +36,30 @@ class MaxClient:
             await self.send_text(user_id, text)
             return
         try:
-            token = await self._upload_image(image_bytes)
-            await self._request("/messages", {"text": text, "attachments": [{"type": "image", "payload": {"token": token}}]}, params={"user_id": user_id})
+            payload = await self._upload_image(image_bytes)
+            await self._request("/messages", {"text": text, "attachments": [{"type": "image", "payload": payload}]}, params={"user_id": user_id})
         except Exception as exc:
             raise MaxImageError("MAX image send failed") from exc
 
-    async def _upload_image(self, image_bytes: bytes) -> str:
+    async def _upload_image(self, image_bytes: bytes) -> dict:
+        token = self._secret_provider.get_secret("MAX_BOT_TOKEN")
+        headers = {"Authorization": token}
         upload_data = await self._request("/uploads", None, params={"type": "image"})
         upload_url = upload_data.get("url")
         if not upload_url:
             raise MaxImageError("MAX upload URL is missing")
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-            response = await client.post(upload_url, files={"data": ("notification.png", image_bytes, "image/png")})
+            response = await client.post(upload_url, headers=headers, files={"data": ("notification.png", image_bytes, "image/png")})
         response.raise_for_status()
         data = response.json() if response.content else {}
-        token = data.get("token") or upload_data.get("token") or parse_qs(urlparse(upload_url).query).get("token", [""])[0]
-        if not token:
-            raise MaxImageError("MAX upload token is missing")
-        return token
+        if data.get("error_code"):
+            raise MaxImageError(f"MAX upload failed: {data.get('error_data') or data.get('error_code')}")
+        if data.get("photos"):
+            return {"photos": data["photos"]}
+        token_value = data.get("token") or upload_data.get("token") or parse_qs(urlparse(upload_url).query).get("token", [""])[0]
+        if token_value:
+            return {"token": token_value}
+        raise MaxImageError("MAX upload payload is missing")
 
     async def _request(self, path: str, json_body: dict | None, params: dict | None = None) -> dict:
         token = self._secret_provider.get_secret("MAX_BOT_TOKEN")
@@ -67,7 +73,8 @@ class MaxClient:
                         resp = await client.post(url, headers=headers, params=params)
                     else:
                         resp = await client.post(url, headers=headers, params=params, json=json_body)
-                if resp.status_code == 429 or resp.status_code >= 500:
+                retryable_attachment = resp.status_code == 400 and "attachment.not.ready" in resp.text
+                if resp.status_code == 429 or resp.status_code >= 500 or retryable_attachment:
                     raise MaxRequestError(f"retryable {resp.status_code}")
                 resp.raise_for_status()
                 return resp.json() if resp.content else {}

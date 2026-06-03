@@ -5,7 +5,7 @@ from application.errors.exceptions import DuplicateSubscriptionError, SubjectIna
 from application.services import NotificationService
 from application.templates.code_template_provider import CodeTemplateProvider
 from application.use_cases.use_cases import GetPublicSubjectPageUseCase, PollExternalEventsUseCase, SubscribeUserToSubjectUseCase
-from domain.entities.models import Subscription, Subject, TaskEvent, User
+from domain.entities.models import Subscription, Subject, TaskEvent, TaskImage, User
 from domain.value_objects.enums import ChannelType, EventType, Source, SubjectType
 
 class SubRepo:
@@ -55,6 +55,9 @@ class UserRepo:
     def get_by_id(self,user_id): return self.items.get(user_id)
     def save(self,user): self.items[user.user_id]=user
 
+class ImageLoader:
+    def load(self,event): return [b'image-bytes']
+
 def test_subscription_limit():
     sub=SubRepo(); subj=SubjectRepo(); uc=SubscribeUserToSubjectUseCase(subj,sub)
     for i in range(20): sub.save(Subscription(str(i),'u1',f's{i}'))
@@ -94,6 +97,16 @@ def test_notification_service_resolves_channel_user_id():
 
     assert sent==1
     assert ch.sent[0].user_id=='max-user-1'
+
+def test_notification_service_loads_event_image_bytes():
+    prepo=PRepo(); ch=Channel()
+    svc=NotificationService(prepo,Registry(ch),CodeTemplateProvider(),image_loader=ImageLoader())
+    event=TaskEvent('e1','s1',Source.REGIONCITY,EventType.CLEANING_COMPLETED,datetime.now(UTC),{'subject_title':'A'},[TaskImage('https://cdn.example/1.jpg')])
+
+    sent=svc.notify_users(event,['u1'])
+
+    assert sent==1
+    assert ch.sent[0].metadata['image_bytes']==b'image-bytes'
 
 def test_polling_saves_events_and_can_suppress_backfill_notifications():
     event=TaskEvent('e2','s1',Source.REGIONCITY,EventType.CLEANING_COMPLETED,datetime.now(UTC),{'subject_title':'A'})

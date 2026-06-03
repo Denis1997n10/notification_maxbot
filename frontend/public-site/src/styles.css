@@ -235,6 +235,37 @@ button:disabled {
   border-radius: 14px;
 }
 
+.events li > * + * {
+  margin-top: 8px;
+}
+
+.event-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.event-images a {
+  display: block;
+  width: 92px;
+  height: 92px;
+  overflow: hidden;
+  border: 1px solid #dfe8e4;
+  border-radius: 14px;
+  background: #f8fbfa;
+}
+
+.event-images img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.event-no-images {
+  display: block;
+  color: #8ca0ad;
+}
+
 @media (max-width: 720px) {
   .page {
     width: min(100% - 24px, 960px);

@@ -1,3 +1,7 @@
+import asyncio
+
+import pytest
+
 from infrastructure.max.max_message_renderer import MaxMessageRenderer
 from infrastructure.max.max_notification_channel import MaxNotificationChannel
 from infrastructure.max.max_webhook_parser import MaxWebhookParser
@@ -77,6 +81,68 @@ def test_image_failure_still_sends_text():
     payload = NotificationPayload(user_id="u1", channel="max", title="T", body="B", metadata={"image_bytes": b"x"})
     channel.send(payload)
     assert len(client.sent_text) == 1
+
+
+def test_required_image_failure_is_not_silently_downgraded_to_text():
+    client = FakeMaxClient(fail_image=True)
+    channel = MaxNotificationChannel(client)
+    from domain.entities.models import NotificationPayload
+    from infrastructure.max.errors import MaxImageError
+
+    payload = NotificationPayload(user_id="u1", channel="max", title="T", body="B", metadata={"image_bytes": b"x", "require_image": True})
+
+    with pytest.raises(MaxImageError):
+        channel.send(payload)
+    assert client.sent_text == []
+
+
+def test_max_client_upload_returns_photos_payload(monkeypatch):
+    from infrastructure.max.max_client import MaxClient
+
+    class Secret:
+        def get_secret(self, key):
+            assert key == "MAX_BOT_TOKEN"
+            return "secret"
+
+    class Response:
+        content = b"{}"
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"photos": {"photo-id": {"token": "photo-token"}}}
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, headers=None, files=None):
+            assert url == "https://upload.example"
+            assert headers == {"Authorization": "secret"}
+            assert files["data"][0] == "notification.png"
+            return Response()
+
+    client = MaxClient(Secret(), "https://platform-api.max.ru")
+
+    async def fake_request(path, json_body, params=None):
+        assert path == "/uploads"
+        assert json_body is None
+        assert params == {"type": "image"}
+        return {"url": "https://upload.example"}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    monkeypatch.setattr("infrastructure.max.max_client.httpx.AsyncClient", Client)
+
+    payload = asyncio.run(client._upload_image(b"png"))
+
+    assert payload == {"photos": {"photo-id": {"token": "photo-token"}}}
 
 
 def test_start_payload_parsed():

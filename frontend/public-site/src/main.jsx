@@ -344,6 +344,17 @@ function EntrancePage() {
               <li key={event.id || index}>
                 <b>{event.title}</b>
                 <div>{event.description}</div>
+                {event.images?.length ? (
+                  <div className="event-images">
+                    {event.images.map((image, imageIndex) => (
+                      <a key={image.url || imageIndex} href={image.url} target="_blank" rel="noreferrer">
+                        <img src={image.url} alt={image.label || 'Фото события'} loading="lazy" />
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <small className="event-no-images">Фото по этому событию не переданы источником.</small>
+                )}
                 <small>{event.occurred_at}</small>
               </li>
             ))}

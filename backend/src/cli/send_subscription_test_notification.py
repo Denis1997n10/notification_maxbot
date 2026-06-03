@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import json
+import struct
+import zlib
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -26,9 +27,27 @@ class _Registry:
         return self.channel
 
 
-TEST_PNG = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAvElEQVR4nO3aQQ6AIAwAwYj//9l4AymwM7FJNYk3bqUEKew+CTNmzJgxY8aMGTPm8OQDzrbt2+N9v9t7D6AB5yM4gAacj+AAAHgLwQEA8BaCAwDgLQQHAMBbCA4AgLcQHAAAbyE4AABeQnAAALyF4AAAeAvBAQDwFoIDeId3RrjP1rs0y9b0bQF7vLQAAHgLwQEA8BaCAwDgLQQHAMBbCA4AgLcQHAAAbyE4AABeQnAAALyF4AAAeAvBAQDwFoID+AAAM2bMmDFjxowZM3b8ALHfCq9mW5wYAAAAAElFTkSuQmCC"
-)
+def _png_chunk(kind: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+
+def _build_test_png(width: int = 160, height: int = 90) -> bytes:
+    rows = []
+    for y in range(height):
+        row = bytearray([0])
+        for x in range(width):
+            row += bytes((0, 110 + (x % 40), 88 + (y % 80), 255))
+        rows.append(bytes(row))
+    raw = b"".join(rows)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+        + _png_chunk(b"IDAT", zlib.compress(raw))
+        + _png_chunk(b"IEND", b"")
+    )
+
+
+TEST_PNG = _build_test_png()
 
 
 def main() -> int:
@@ -69,6 +88,7 @@ def main() -> int:
     metadata = {"subject_title": subject.title}
     if args.with_image:
         metadata["image_bytes"] = TEST_PNG
+        metadata["require_image"] = True
     event = TaskEvent(
         external_id=f"manual-notification-test-{uuid4()}",
         subject_id=subject.subject_id,

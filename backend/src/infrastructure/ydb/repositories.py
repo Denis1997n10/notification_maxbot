@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from domain.entities.models import AdminUser, Subject, Subscription, TaskEvent, User
+from domain.entities.models import AdminUser, Subject, Subscription, TaskEvent, TaskImage, User
 from domain.ports.interfaces import (
     AdminPermissionRepository,
     AdminUserRepository,
@@ -593,6 +593,8 @@ class YdbTaskEventRepository(TaskEventRepository):
 
     def save(self, event: TaskEvent) -> None:
         metadata = {key: value for key, value in event.metadata.items() if key != "image_bytes"}
+        if event.images:
+            metadata["images"] = [{"url": image.url, "label": image.label} for image in event.images]
         self.session.execute(
             """
             UPSERT INTO task_events (source,external_id,event_type,subject_id,occurred_at,metadata_json,created_at)
@@ -618,13 +620,20 @@ class YdbTaskEventRepository(TaskEventRepository):
         return [self._map_event(row) for row in rows[:limit]]
 
     def _map_event(self, row: dict) -> TaskEvent:
+        metadata = json.loads(row.get("metadata_json") or "{}")
+        images = [
+            TaskImage(url=str(item.get("url") or ""), label=item.get("label"))
+            for item in metadata.get("images") or []
+            if item.get("url")
+        ]
         return TaskEvent(
             external_id=row["external_id"],
             subject_id=row["subject_id"],
             source=Source(row["source"]),
             event_type=EventType(row["event_type"]),
             occurred_at=row["occurred_at"],
-            metadata=json.loads(row.get("metadata_json") or "{}"),
+            metadata=metadata,
+            images=images,
         )
 
 

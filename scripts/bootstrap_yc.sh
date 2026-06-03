@@ -105,6 +105,10 @@ else
   # shellcheck disable=SC1090
   source ".local/${env}/secrets.env"
 fi
+enable_polling_timer=false
+if [[ "$env" == "prod" ]]; then
+  enable_polling_timer=true
+fi
 
 require_non_empty "REGIONCITY_SECRET_ID" "${REGIONCITY_SECRET_ID:-}"
 require_non_empty "MAX_BOT_SECRET_ID" "${MAX_BOT_SECRET_ID:-}"
@@ -144,7 +148,7 @@ admin_jwt_secret_version_id = "${ADMIN_JWT_SECRET_VERSION_ID:-}"
 max_webhook_secret_id = "${MAX_WEBHOOK_SECRET_ID:-}"
 max_webhook_secret_version_id = "${MAX_WEBHOOK_SECRET_VERSION_ID:-}"
 function_use_mocks = $function_use_mocks
-enable_polling_timer = false
+enable_polling_timer = $enable_polling_timer
 TFVARS
 
 cat > "infra/terraform/backend-${env}.hcl" <<BACKEND

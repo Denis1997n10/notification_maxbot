@@ -107,7 +107,7 @@ class NotificationChannelRegistry(ABC):
 
 class ImageLoader(ABC):
     @abstractmethod
-    def load(self, event: TaskEvent) -> list[str]: ...
+    def load(self, event: TaskEvent) -> list[bytes]: ...
 
 
 class TemplateProvider(ABC):

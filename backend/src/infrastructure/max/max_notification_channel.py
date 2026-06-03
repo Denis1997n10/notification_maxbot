@@ -21,6 +21,8 @@ class MaxNotificationChannel(NotificationChannel):
                 asyncio.run(self._client.send_with_image(payload.user_id, text, image_bytes))
                 return
             except MaxImageError:
+                if payload.metadata.get("require_image"):
+                    raise
                 pass
         asyncio.run(self._client.send_text(payload.user_id, text, keyboard=keyboard))
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import UTC, datetime
 from domain.entities.models import NotificationPayload, TaskEvent
-from domain.ports.interfaces import NotificationChannelRegistry, ProcessedEventRepository, TemplateProvider, UserRepository
+from domain.ports.interfaces import ImageLoader, NotificationChannelRegistry, ProcessedEventRepository, TemplateProvider, UserRepository
 
 
 class NotificationService:
@@ -11,11 +11,13 @@ class NotificationService:
         channel_registry: NotificationChannelRegistry,
         template_provider: TemplateProvider,
         user_repo: UserRepository | None = None,
+        image_loader: ImageLoader | None = None,
     ) -> None:
         self.processed_repo = processed_repo
         self.channel_registry = channel_registry
         self.template_provider = template_provider
         self.user_repo = user_repo
+        self.image_loader = image_loader
 
     def notify_users(self, event: TaskEvent, user_ids: list[str], channel: str = "max") -> int:
         if self.processed_repo.is_processed(event.source.value, event.external_id, event.event_type.value):
@@ -30,6 +32,12 @@ class NotificationService:
             payload_metadata = {}
             if event.metadata.get("image_bytes"):
                 payload_metadata["image_bytes"] = event.metadata["image_bytes"]
+            elif event.images and self.image_loader:
+                loaded_images = self._load_images(event)
+                if loaded_images:
+                    payload_metadata["image_bytes"] = loaded_images[0]
+            if event.metadata.get("require_image"):
+                payload_metadata["require_image"] = True
             payload = NotificationPayload(user_id=recipient_id, channel=channel, title=title, body=body, metadata=payload_metadata)
             try:
                 self.channel_registry.get(channel).send(payload)
@@ -48,6 +56,12 @@ class NotificationService:
         if str(user_channel) != str(channel):
             return None
         return user.channel_user_id or user.user_id
+
+    def _load_images(self, event: TaskEvent) -> list[bytes]:
+        try:
+            return self.image_loader.load(event) if self.image_loader else []
+        except Exception:
+            return []
 
 
 class FeatureFlagService:

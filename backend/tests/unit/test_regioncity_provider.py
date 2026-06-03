@@ -60,6 +60,21 @@ def test_mapper_worker_id_not_in_payload_and_custom_fields_mapped():
     assert "worker-id" not in payload.body
 
 
+def test_mapper_extracts_image_urls_from_confirmed_payload_fields():
+    mapper = RegionCityMapper()
+    subject = Subject("s1", SubjectType.ENTRANCE, "E", True, "m1")
+    task = make_task()
+    task["photos"] = [{"url": "https://cdn.example/photo-1.jpg"}]
+    task["customFieldFormItems"].append({"name": "Фото после уборки", "value": "https://cdn.example/photo-2.png"})
+
+    event = mapper.map_task_to_event(task, subject)
+
+    assert [image.url for image in event.images] == [
+        "https://cdn.example/photo-1.jpg",
+        "https://cdn.example/photo-2.png",
+    ]
+
+
 def test_provider_uses_map_object_lookup_and_skips_missing_subject():
     import asyncio
     tasks = [make_task(task_id="1", map_object_id="found"), make_task(task_id="2", map_object_id="missing")]
