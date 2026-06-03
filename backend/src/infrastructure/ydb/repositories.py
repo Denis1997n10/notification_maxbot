@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from domain.entities.models import AdminUser, Subject, Subscription, User
+from domain.entities.models import AdminUser, Subject, Subscription, TaskEvent, User
 from domain.ports.interfaces import (
     AdminPermissionRepository,
     AdminUserRepository,
@@ -13,10 +13,11 @@ from domain.ports.interfaces import (
     PublicPageCacheRepository,
     SubjectRepository,
     SubscriptionRepository,
+    TaskEventRepository,
     UserFeatureFlagRepository,
     UserRepository,
 )
-from domain.value_objects.enums import AdminRole, SubjectType
+from domain.value_objects.enums import AdminRole, EventType, Source, SubjectType
 from infrastructure.ydb.client import YdbSession
 
 
@@ -120,7 +121,8 @@ class YdbSubjectRepository(SubjectRepository):
     def get_entrance_page_data(self, public_code: str) -> dict | None:
         rows = self.session.execute(
             """
-            SELECT e.public_code AS public_code,
+            SELECT e.id AS subject_id,
+                   e.public_code AS public_code,
                    e.entrance_number AS entrance_number,
                    e.is_active AS is_active,
                    d.name AS district_name,
@@ -515,8 +517,19 @@ class YdbSubscriptionRepository(SubscriptionRepository):
     def __init__(self, session: YdbSession) -> None:
         self.session = session
 
+    def list_active(self) -> list[Subscription]:
+        rows = self.session.execute("SELECT * FROM subscriptions WHERE is_active=true")
+        return [Subscription(subscription_id=r["id"], user_id=r["user_id"], subject_id=r["subject_id"], is_active=r["is_active"], created_at=r["created_at"]) for r in rows]
+
     def list_active_by_user(self, user_id: str) -> list[Subscription]:
         rows = self.session.execute("SELECT * FROM subscriptions VIEW idx_user_id WHERE user_id=$user_id AND is_active=true", {"$user_id": user_id})
+        return [Subscription(subscription_id=r["id"], user_id=r["user_id"], subject_id=r["subject_id"], is_active=r["is_active"], created_at=r["created_at"]) for r in rows]
+
+    def list_active_by_subject(self, subject_id: str) -> list[Subscription]:
+        rows = self.session.execute(
+            "SELECT * FROM subscriptions VIEW idx_subject WHERE subject_type=$subject_type AND subject_id=$subject_id AND is_active=true",
+            {"$subject_type": "entrance", "$subject_id": subject_id},
+        )
         return [Subscription(subscription_id=r["id"], user_id=r["user_id"], subject_id=r["subject_id"], is_active=r["is_active"], created_at=r["created_at"]) for r in rows]
 
     def get_active(self, user_id: str, subject_id: str) -> Subscription | None:
@@ -572,6 +585,47 @@ class YdbProcessedEventRepository(ProcessedEventRepository):
 
     def mark_processed(self, source: str, external_id: str, event_type: str, processed_at: datetime) -> None:
         self.session.execute("UPSERT INTO processed_events (source, external_id, event_type, subject_type, subject_id, processed_at) VALUES ($source,$external_id,$event_type,$subject_type,$subject_id,$processed_at)", {"$source": source, "$external_id": external_id, "$event_type": event_type, "$subject_type": "entrance", "$subject_id": "", "$processed_at": processed_at})
+
+
+class YdbTaskEventRepository(TaskEventRepository):
+    def __init__(self, session: YdbSession) -> None:
+        self.session = session
+
+    def save(self, event: TaskEvent) -> None:
+        metadata = {key: value for key, value in event.metadata.items() if key != "image_bytes"}
+        self.session.execute(
+            """
+            UPSERT INTO task_events (source,external_id,event_type,subject_id,occurred_at,metadata_json,created_at)
+            VALUES ($source,$external_id,$event_type,$subject_id,$occurred_at,$metadata_json,$created_at)
+            """,
+            {
+                "$source": event.source.value,
+                "$external_id": event.external_id,
+                "$event_type": event.event_type.value,
+                "$subject_id": event.subject_id,
+                "$occurred_at": event.occurred_at,
+                "$metadata_json": json.dumps(metadata, ensure_ascii=False, default=str),
+                "$created_at": _now(),
+            },
+        )
+
+    def list_latest_by_subject(self, subject_id: str, limit: int = 10) -> list[TaskEvent]:
+        rows = self.session.execute(
+            "SELECT * FROM task_events VIEW idx_subject_id WHERE subject_id=$subject_id",
+            {"$subject_id": subject_id},
+        )
+        rows.sort(key=lambda row: row["occurred_at"], reverse=True)
+        return [self._map_event(row) for row in rows[:limit]]
+
+    def _map_event(self, row: dict) -> TaskEvent:
+        return TaskEvent(
+            external_id=row["external_id"],
+            subject_id=row["subject_id"],
+            source=Source(row["source"]),
+            event_type=EventType(row["event_type"]),
+            occurred_at=row["occurred_at"],
+            metadata=json.loads(row.get("metadata_json") or "{}"),
+        )
 
 
 class YdbFeatureFlagRepository(FeatureFlagRepository):

@@ -31,6 +31,9 @@ class SubscriptionRepository(ABC):
     def list_active_by_user(self, user_id: str) -> list[Subscription]: ...
 
     @abstractmethod
+    def list_active_by_subject(self, subject_id: str) -> list[Subscription]: ...
+
+    @abstractmethod
     def get_active(self, user_id: str, subject_id: str) -> Subscription | None: ...
 
     @abstractmethod
@@ -49,6 +52,14 @@ class ProcessedEventRepository(ABC):
 
     @abstractmethod
     def mark_processed(self, source: str, external_id: str, event_type: str, processed_at: datetime) -> None: ...
+
+
+class TaskEventRepository(ABC):
+    @abstractmethod
+    def save(self, event: TaskEvent) -> None: ...
+
+    @abstractmethod
+    def list_latest_by_subject(self, subject_id: str, limit: int = 10) -> list[TaskEvent]: ...
 
 
 class FeatureFlagRepository(ABC):

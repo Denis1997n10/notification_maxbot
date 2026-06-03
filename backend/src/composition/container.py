@@ -18,6 +18,7 @@ from application.templates.code_template_provider import CodeTemplateProvider
 from application.use_cases.use_cases import (
     DisableAllUserNotificationsUseCase,
     ListUserSubscriptionsUseCase,
+    PollExternalEventsUseCase,
     SubscribeUserToSubjectUseCase,
 )
 from config.settings import load_settings
@@ -30,6 +31,8 @@ from infrastructure.max.max_notification_channel import MaxNotificationChannel
 from infrastructure.max.max_webapp_validator import MaxWebAppValidator
 from infrastructure.max.max_webhook_parser import MaxWebhookParser
 from infrastructure.regioncity.regioncity_client import RegionCityClient
+from infrastructure.regioncity.regioncity_mapper import RegionCityMapper
+from infrastructure.regioncity.regioncity_task_provider import RegionCityTaskProvider
 from infrastructure.ydb.client import YdbClient, YdbConfig
 from infrastructure.ydb.repositories import (
     YdbAdminPermissionRepository,
@@ -38,6 +41,7 @@ from infrastructure.ydb.repositories import (
     YdbProcessedEventRepository,
     YdbSubjectRepository,
     YdbSubscriptionRepository,
+    YdbTaskEventRepository,
     YdbUserRepository,
 )
 
@@ -69,6 +73,7 @@ class PublicService:
         subscribe_uc: SubscribeUserToSubjectUseCase | None = None,
         secret_provider: SecretProvider | None = None,
         max_bot_deeplink_base: str = "",
+        events: YdbTaskEventRepository | None = None,
     ):
         self.subjects = subjects
         self.users = users
@@ -76,6 +81,7 @@ class PublicService:
         self.subscribe_uc = subscribe_uc
         self.secret_provider = secret_provider
         self.max_bot_deeplink_base = max_bot_deeplink_base.rstrip("/")
+        self.events = events
 
     def list_cities(self):
         return self.subjects.list_cities()
@@ -142,7 +148,7 @@ class PublicService:
             "address": data.get("address", ""),
             "public_url": self._public_url(public_code),
             "max_bot_url": self._max_bot_url(public_code),
-            "events": [],
+            "events": self._event_responses(data.get("subject_id", "")),
             "mock": False,
         }
 
@@ -159,6 +165,19 @@ class PublicService:
             result["public_url"] = self._public_url(item["public_code"])
             result["max_bot_url"] = self._max_bot_url(item["public_code"])
         return result
+
+    def _event_responses(self, subject_id: str) -> list[dict]:
+        if not self.events or not subject_id:
+            return []
+        return [self._event_response(event) for event in self.events.list_latest_by_subject(subject_id, 10)]
+
+    def _event_response(self, event: TaskEvent) -> dict:
+        return {
+            "id": event.external_id,
+            "title": "Уборка завершена" if event.event_type == EventType.CLEANING_COMPLETED else event.event_type.value,
+            "description": event.metadata.get("address") or event.metadata.get("title") or "Событие по адресу",
+            "occurred_at": event.occurred_at.isoformat(),
+        }
 
 
 class AdminService:
@@ -1161,6 +1180,7 @@ def build_container() -> AppContainer:
     users = YdbUserRepository(session)
     subscriptions = YdbSubscriptionRepository(session)
     processed = YdbProcessedEventRepository(session)
+    events = YdbTaskEventRepository(session)
     admin_users = YdbAdminUserRepository(session)
     admin_permissions = YdbAdminPermissionRepository(session)
     _ = YdbFeatureFlagRepository(session)
@@ -1169,6 +1189,7 @@ def build_container() -> AppContainer:
     max_channel = MaxNotificationChannel(MaxClient(secret, settings.max_api_base_url))
     regioncity_client = RegionCityClient(secret, settings.regioncity_base_url)
     notifier = NotificationService(processed, _Registry(max_channel), CodeTemplateProvider())
+    regioncity_provider = RegionCityTaskProvider(regioncity_client, subjects, RegionCityMapper())
 
     return AppContainer(
         bot_service=BotService(
@@ -1187,6 +1208,7 @@ def build_container() -> AppContainer:
             SubscribeUserToSubjectUseCase(subjects, subscriptions),
             secret,
             settings.max_bot_deeplink_base,
+            events,
         ),
         admin_service=AdminService(
             admin_users,
@@ -1202,7 +1224,7 @@ def build_container() -> AppContainer:
             regioncity_client,
             settings.regioncity_map_objects_path,
         ),
-        polling_use_case=_Mock(),
+        polling_use_case=PollExternalEventsUseCase(regioncity_provider, events, subscriptions, notifier, processed),
         notification_service=notifier,
         bot_reply_channel=max_channel,
     )

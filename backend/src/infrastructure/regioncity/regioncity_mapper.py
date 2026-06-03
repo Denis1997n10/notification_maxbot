@@ -21,6 +21,7 @@ class RegionCityMapper:
             return None
 
         metadata = self._build_metadata(task)
+        metadata["subject_title"] = subject.title
         occurred_at = self._parse_dt(task.get("lastStatusChangeDate"))
         return TaskEvent(
             external_id=str(task.get("taskID")),

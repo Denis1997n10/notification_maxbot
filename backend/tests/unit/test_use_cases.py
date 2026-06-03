@@ -1,15 +1,17 @@
 from datetime import UTC, datetime
+import asyncio
 import pytest
 from application.errors.exceptions import DuplicateSubscriptionError, SubjectInactiveError, SubscriptionLimitExceededError
 from application.services import NotificationService
 from application.templates.code_template_provider import CodeTemplateProvider
-from application.use_cases.use_cases import GetPublicSubjectPageUseCase, SubscribeUserToSubjectUseCase
+from application.use_cases.use_cases import GetPublicSubjectPageUseCase, PollExternalEventsUseCase, SubscribeUserToSubjectUseCase
 from domain.entities.models import Subscription, Subject, TaskEvent
 from domain.value_objects.enums import EventType, Source, SubjectType
 
 class SubRepo:
     def __init__(self): self.items=[]
     def list_active_by_user(self,u): return [x for x in self.items if x.user_id==u and x.is_active]
+    def list_active_by_subject(self,s): return [x for x in self.items if x.subject_id==s and x.is_active]
     def get_active(self,u,s): return next((x for x in self.items if x.user_id==u and x.subject_id==s and x.is_active),None)
     def save(self,s): self.items.append(s)
     def deactivate(self,u,s): ...
@@ -39,6 +41,15 @@ class Registry:
     def __init__(self,ch): self.ch=ch
     def get(self,name): return self.ch
 
+class EventRepo:
+    def __init__(self): self.items=[]
+    def save(self,event): self.items.append(event)
+    def list_latest_by_subject(self,subject_id,limit=10): return [x for x in self.items if x.subject_id==subject_id][:limit]
+
+class Provider:
+    def __init__(self,events): self.events=events
+    async def fetch_events(self,date_from,date_to): return self.events
+
 def test_subscription_limit():
     sub=SubRepo(); subj=SubjectRepo(); uc=SubscribeUserToSubjectUseCase(subj,sub)
     for i in range(20): sub.save(Subscription(str(i),'u1',f's{i}'))
@@ -67,3 +78,17 @@ def test_processed_event_skip_and_failure_continue():
     sent=svc.notify_users(event,['u1','u2','u3'])
     assert sent==2
     assert svc.notify_users(event,['u1'])==0
+
+def test_polling_saves_events_and_can_suppress_backfill_notifications():
+    event=TaskEvent('e2','s1',Source.REGIONCITY,EventType.CLEANING_COMPLETED,datetime.now(UTC),{'subject_title':'A'})
+    event_repo=EventRepo(); sub=SubRepo(); sub.save(Subscription('sub1','u1','s1'))
+    prepo=PRepo(); ch=Channel(); notifier=NotificationService(prepo,Registry(ch),CodeTemplateProvider())
+    uc=PollExternalEventsUseCase(Provider([event]),event_repo,sub,notifier,prepo)
+
+    result=asyncio.run(uc.execute(datetime.now(UTC),datetime.now(UTC),notify=False))
+
+    assert result['saved_count']==1
+    assert result['sent_count']==0
+    assert result['suppressed_notification_count']==1
+    assert event_repo.items[0].external_id=='e2'
+    assert ch.sent==[]

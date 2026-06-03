@@ -17,7 +17,10 @@ class NotificationService:
         sent = 0
         for user_id in user_ids:
             title, body = self.template_provider.render(event.event_type.value, channel, {"subject_title": event.metadata.get("subject_title", "подъезд")})
-            payload = NotificationPayload(user_id=user_id, channel=channel, title=title, body=body)
+            payload_metadata = {}
+            if event.metadata.get("image_bytes"):
+                payload_metadata["image_bytes"] = event.metadata["image_bytes"]
+            payload = NotificationPayload(user_id=user_id, channel=channel, title=title, body=body, metadata=payload_metadata)
             try:
                 self.channel_registry.get(channel).send(payload)
                 sent += 1

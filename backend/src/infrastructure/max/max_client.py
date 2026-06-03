@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
 from domain.ports.interfaces import SecretProvider
+from infrastructure.max.errors import MaxImageError
 from infrastructure.max.errors import MaxRequestError
 
 
@@ -30,10 +32,30 @@ class MaxClient:
         await self._request("/answers", {"message": message}, params={"callback_id": callback_id})
 
     async def send_with_image(self, user_id: str, text: str, image_bytes: bytes | None) -> None:
-        # Attachment delivery remains disabled until a confirmed image source and MAX upload flow exist.
-        await self.send_text(user_id, text)
+        if not image_bytes:
+            await self.send_text(user_id, text)
+            return
+        try:
+            token = await self._upload_image(image_bytes)
+            await self._request("/messages", {"text": text, "attachments": [{"type": "image", "payload": {"token": token}}]}, params={"user_id": user_id})
+        except Exception as exc:
+            raise MaxImageError("MAX image send failed") from exc
 
-    async def _request(self, path: str, json_body: dict, params: dict | None = None) -> dict:
+    async def _upload_image(self, image_bytes: bytes) -> str:
+        upload_data = await self._request("/uploads", None, params={"type": "image"})
+        upload_url = upload_data.get("url")
+        if not upload_url:
+            raise MaxImageError("MAX upload URL is missing")
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            response = await client.post(upload_url, files={"data": ("notification.png", image_bytes, "image/png")})
+        response.raise_for_status()
+        data = response.json() if response.content else {}
+        token = data.get("token") or upload_data.get("token") or parse_qs(urlparse(upload_url).query).get("token", [""])[0]
+        if not token:
+            raise MaxImageError("MAX upload token is missing")
+        return token
+
+    async def _request(self, path: str, json_body: dict | None, params: dict | None = None) -> dict:
         token = self._secret_provider.get_secret("MAX_BOT_TOKEN")
         headers = {"Authorization": token}
         url = f"{self._base_url}{path}"
@@ -41,7 +63,10 @@ class MaxClient:
         for attempt in range(self._max_retries + 1):
             try:
                 async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-                    resp = await client.post(url, headers=headers, params=params, json=json_body)
+                    if json_body is None:
+                        resp = await client.post(url, headers=headers, params=params)
+                    else:
+                        resp = await client.post(url, headers=headers, params=params, json=json_body)
                 if resp.status_code == 429 or resp.status_code >= 500:
                     raise MaxRequestError(f"retryable {resp.status_code}")
                 resp.raise_for_status()

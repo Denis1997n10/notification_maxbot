@@ -59,7 +59,7 @@ class DummyAdminService:
 
 
 class DummyPolling:
-    async def execute(self, date_from, date_to):
+    async def execute(self, date_from, date_to, notify=True):
         return {"fetched_count": 1, "processed_count": 1, "skipped_count": 0, "sent_count": 1, "failed_count": 0}
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from domain.entities.models import Subscription
 from domain.value_objects.enums import SubjectType
-from domain.ports.interfaces import ExternalTaskProvider, PublicPageCacheRepository, SubjectRepository, SubscriptionRepository
+from domain.ports.interfaces import ExternalTaskProvider, ProcessedEventRepository, PublicPageCacheRepository, SubjectRepository, SubscriptionRepository, TaskEventRepository
 from application.errors.exceptions import DuplicateSubscriptionError, SubjectInactiveError, SubscriptionLimitExceededError
 from application.services import NotificationService
 
@@ -77,6 +77,36 @@ class ProcessExternalEventsUseCase:
             users = subscribers_resolver(event.subject_id)
             total += self.notifier.notify_users(event, users)
         return total
+
+
+@dataclass
+class PollExternalEventsUseCase:
+    provider: ExternalTaskProvider
+    event_repo: TaskEventRepository
+    subscriptions: SubscriptionRepository
+    notifier: NotificationService
+    processed_events: ProcessedEventRepository
+
+    async def execute(self, date_from, date_to, notify: bool = True, mark_processed_without_notify: bool = True) -> dict:
+        events = await self.provider.fetch_events(date_from=date_from, date_to=date_to)
+        saved_count = 0
+        sent_count = 0
+        suppressed_count = 0
+        for event in events:
+            self.event_repo.save(event)
+            saved_count += 1
+            users = [subscription.user_id for subscription in self.subscriptions.list_active_by_subject(event.subject_id)]
+            if notify:
+                sent_count += self.notifier.notify_users(event, users)
+            elif mark_processed_without_notify and not self.processed_events.is_processed(event.source.value, event.external_id, event.event_type.value):
+                self.processed_events.mark_processed(event.source.value, event.external_id, event.event_type.value, event.occurred_at)
+                suppressed_count += len(users)
+        return {
+            "fetched_count": len(events),
+            "saved_count": saved_count,
+            "sent_count": sent_count,
+            "suppressed_notification_count": suppressed_count,
+        }
 
 
 @dataclass

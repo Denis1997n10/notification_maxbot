@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from composition.container import api_response, build_container, now_utc
@@ -16,10 +16,22 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     container = build_container()
 
     now = now_utc()
-    date_from = now - timedelta(
+    date_to = _parse_dt(event.get("date_to")) if event.get("date_to") else now
+    date_from = _parse_dt(event.get("date_from")) if event.get("date_from") else date_to - timedelta(
         minutes=settings.polling_interval_minutes + settings.polling_overlap_minutes
     )
+    notify = _parse_bool(event.get("notify", True))
 
-    result = asyncio.run(container.polling_use_case.execute(date_from=date_from, date_to=now))
-    logger.info("regioncity_polling_done", extra={"date_from": date_from.isoformat(), "date_to": now.isoformat(), **(result or {})})
+    result = asyncio.run(container.polling_use_case.execute(date_from=date_from, date_to=date_to, notify=notify))
+    logger.info("regioncity_polling_done", extra={"date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "notify": notify, **(result or {})})
     return api_response(200, {"ok": True, **(result or {})})
+
+
+def _parse_dt(value: str) -> datetime:
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+def _parse_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() not in {"0", "false", "no", "off"}
